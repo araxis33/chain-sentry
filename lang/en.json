@@ -14,5 +14,11 @@
   "fundedFetchFailed": "{chain}: request failed for watched wallet {short}",
   "fundedQuiet": "{chain}: watched wallet {short} deployed nothing new",
   "deployFound": "*** DEPLOY: watched wallet {wallet} shipped {count} new contract(s) on {chain} ***",
-  "deployLine": "{contract}  (deployed {time})"
+  "deployLine": "{contract}  (deployed {time})",
+
+  "nameSearchFailed": "{chain}: name search for '{query}' failed",
+  "nameBaseline": "{chain}: baseline saved, {count} existing name matches recorded (mostly impostors)",
+  "nameNew": "NEW contracts on {chain} that do not match the impostor template ({count}) - check by hand:",
+  "nameJunk": "{chain}: +{count} new impostors on the template supply (noise, ignored)",
+  "nameNoNew": "{chain}: no new name matches"
 }

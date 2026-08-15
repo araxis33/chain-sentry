@@ -220,6 +220,61 @@ foreach ($chain in @($cfg.chains)) {
     }
 
     $cs['funded'] = $fundedState
+
+    # --- new contracts matching the project's name --------------------------
+    # Popular names attract impostors: the chain fills up with copies long
+    # before the real thing ships. A baseline snapshot of what already exists
+    # keeps those out of the log, and the template supply filter drops the
+    # mass-produced ones, so only genuinely unusual matches are reported.
+    if ($chain.nameSearch) {
+        $seen = @{}
+        foreach ($q in @($chain.nameSearch.queries)) {
+            $body = Get-Body "$api/search?q=$q"
+            if ($null -eq $body) {
+                $notes.Add((Format-Message $M.nameSearchFailed @{ chain = $chainName; query = $q }))
+                continue
+            }
+            try {
+                foreach ($it in ($body | ConvertFrom-Json).items) {
+                    if (-not $it.address_hash) { continue }
+                    $k = $it.address_hash.ToLower()
+                    if (-not $seen.ContainsKey($k)) {
+                        $seen[$k] = ('{0} ({1}) supply={2} verified={3}' -f `
+                            $it.name, $it.symbol, $it.total_supply, $it.is_smart_contract_verified)
+                    }
+                }
+            } catch {
+                $notes.Add((Format-Message $M.nameSearchFailed @{ chain = $chainName; query = $q }))
+            }
+        }
+
+        $nameState = ConvertTo-Hashtable $cs['names']
+        if ($nameState.Count -eq 0) {
+            $notes.Add((Format-Message $M.nameBaseline @{ chain = $chainName; count = $seen.Count }))
+        } else {
+            $new = @($seen.Keys | Where-Object { -not $nameState.ContainsKey($_) })
+            if ($new.Count -gt 0) {
+                $ignore  = $chain.nameSearch.ignoreSupply
+                $notable = @($new | Where-Object {
+                    -not $ignore -or $seen[$_] -notmatch [regex]::Escape("supply=$ignore") })
+                $junk = $new.Count - $notable.Count
+
+                if ($notable.Count -gt 0) {
+                    $alerts.Add((Format-Message $M.nameNew @{ chain = $chainName; count = $notable.Count }))
+                    foreach ($k in $notable) { $alerts.Add("    -> $k  $($seen[$k])") }
+                }
+                if ($junk -gt 0) {
+                    $notes.Add((Format-Message $M.nameJunk @{ chain = $chainName; count = $junk }))
+                }
+            } else {
+                $notes.Add((Format-Message $M.nameNoNew @{ chain = $chainName }))
+            }
+        }
+
+        $snapshot = @{}
+        foreach ($k in $seen.Keys) { $snapshot[$k] = 1 }
+        $cs['names'] = $snapshot
+    }
 }
 
 # --- write log --------------------------------------------------------------
