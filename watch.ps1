@@ -49,7 +49,8 @@ function Write-JsonFile($path, $object) {
 
 # ConvertFrom-Json hands back PSCustomObject; we want hashtables we can mutate.
 function ConvertTo-Hashtable($obj) {
-    if ($null -eq $obj) { return @{} }
+    if ($null -eq $obj)          { return @{} }
+    if ($obj -is [hashtable])    { return $obj }
     $h = @{}
     foreach ($p in $obj.PSObject.Properties) {
         if ($p.Value -is [System.Management.Automation.PSCustomObject]) {
@@ -109,8 +110,10 @@ foreach ($chain in @($cfg.chains)) {
 
     if (-not $state['chains'].ContainsKey($chainName)) { $state['chains'][$chainName] = @{} }
     $cs = $state['chains'][$chainName]
-    if (-not $cs.ContainsKey('tx')) { $cs['tx'] = @{} }
-    $txState = ConvertTo-Hashtable $cs['tx']
+    if (-not $cs.ContainsKey('tx'))     { $cs['tx'] = @{} }
+    if (-not $cs.ContainsKey('funded')) { $cs['funded'] = @{} }
+    $txState     = ConvertTo-Hashtable $cs['tx']
+    $fundedState = ConvertTo-Hashtable $cs['funded']
 
     foreach ($entry in @($chain.addresses)) {
         $addr  = $entry.address
@@ -153,9 +156,70 @@ foreach ($chain in @($cfg.chains)) {
         }
 
         $txState[$key] = $count
+
+        # Follow the money. Teams rarely deploy from the wallet you are
+        # watching -- they fund a fresh one first and deploy from that. So any
+        # plain address receiving native currency from a watched address gets
+        # added to the watch list, one hop deep.
+        if ($chain.followFunding) {
+            foreach ($t in $items) {
+                if ($t.from.hash -ine $addr)   { continue }
+                if (-not $t.to.hash)           { continue }
+                if ($t.to.is_contract)         { continue }
+                if ([decimal]$t.value -le 0)   { continue }
+
+                $w = $t.to.hash.ToLower()
+                if (-not $fundedState.ContainsKey($w)) {
+                    $fundedState[$w] = @()
+                    $alerts.Add((Format-Message $M.fundedNew @{
+                        chain = $chainName; label = $label; wallet = $t.to.hash }))
+                }
+            }
+        }
     }
 
     $cs['tx'] = $txState
+
+    # --- what did the funded wallets deploy? --------------------------------
+    foreach ($w in @($fundedState.Keys)) {
+        $body = Get-Body "$api/addresses/$w/transactions"
+        if ($null -eq $body) {
+            $notes.Add((Format-Message $M.fundedFetchFailed @{
+                chain = $chainName; short = $w.Substring(0, 10) }))
+            continue
+        }
+
+        try {
+            $known = @{}
+            foreach ($c in @($fundedState[$w])) { if ($c) { $known[$c.ToLower()] = $true } }
+
+            $fresh = New-Object System.Collections.Generic.List[string]
+            foreach ($t in @(($body | ConvertFrom-Json).items)) {
+                $contract = $t.created_contract.hash
+                if (-not $contract) { continue }
+                if ($known.ContainsKey($contract.ToLower())) { continue }
+                $known[$contract.ToLower()] = $true
+                $fresh.Add((Format-Message $M.deployLine @{
+                    contract = $contract; time = $t.timestamp }))
+            }
+
+            if ($fresh.Count -gt 0) {
+                $alerts.Add((Format-Message $M.deployFound @{
+                    chain = $chainName; wallet = $w; count = $fresh.Count }))
+                foreach ($f in $fresh) { $alerts.Add("    -> $f") }
+            } else {
+                $notes.Add((Format-Message $M.fundedQuiet @{
+                    chain = $chainName; short = $w.Substring(0, 10) }))
+            }
+
+            $fundedState[$w] = @($known.Keys)
+        } catch {
+            $notes.Add((Format-Message $M.parseFailed @{
+                chain = $chainName; label = $w.Substring(0, 10) }))
+        }
+    }
+
+    $cs['funded'] = $fundedState
 }
 
 # --- write log --------------------------------------------------------------

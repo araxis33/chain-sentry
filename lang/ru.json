@@ -8,5 +8,11 @@
   "addressAppeared": "*** ГЛАВНЫЙ СИГНАЛ: {label} ({address}) появился в сети {chain} — транзакций: {count}. ***",
   "addressGrew": "*** {label} ({address}) в сети {chain}: +{new} новых транзакций (всего {count}) ***",
   "addressQuiet": "{chain}: {label} {short} — новых транзакций нет (всего {count})",
-  "addressClean": "{chain}: {label} {short} чист (0 транзакций)"
+  "addressClean": "{chain}: {label} {short} чист (0 транзакций)",
+
+  "fundedNew": "{label} профинансировал НОВЫЙ кошелёк в сети {chain}: {wallet} — взят под наблюдение",
+  "fundedFetchFailed": "{chain}: запрос по наблюдаемому кошельку {short} не прошёл",
+  "fundedQuiet": "{chain}: наблюдаемый кошелёк {short} ничего нового не задеплоил",
+  "deployFound": "*** ДЕПЛОЙ: наблюдаемый кошелёк {wallet} выкатил новых контрактов в сети {chain} — {count} шт. ***",
+  "deployLine": "{contract}  (задеплоен {time})"
 }
