@@ -277,6 +277,54 @@ foreach ($chain in @($cfg.chains)) {
     }
 }
 
+# --- websites ---------------------------------------------------------------
+# A placeholder page is a launch countdown you can read. When the markers that
+# make it a placeholder start disappearing, something is being prepared.
+
+foreach ($site in @($cfg.websites)) {
+    $html = Get-Body $site.url
+    if ($null -eq $html) {
+        $notes.Add((Format-Message $M.siteUnreachable @{ url = $site.url }))
+        continue
+    }
+
+    $gone = @($site.markers | Where-Object { $html -notmatch $_ })
+    if ($gone.Count -gt 0) {
+        foreach ($g in $gone) {
+            $alerts.Add((Format-Message $M.siteMarkerGone @{ url = $site.url; marker = $g }))
+        }
+    } else {
+        $notes.Add((Format-Message $M.siteUnchanged @{ url = $site.url }))
+    }
+}
+
+# --- price ------------------------------------------------------------------
+
+$priceLine = ''
+if ($cfg.price) {
+    $url = 'https://api.coingecko.com/api/v3/simple/token_price/{0}?contract_addresses={1}&vs_currencies=usd&include_market_cap=true&include_24hr_change=true' -f `
+        $cfg.price.platform, $cfg.price.contract
+    $body = Get-Body $url
+    if ($null -eq $body) {
+        $notes.Add($M.priceFailed)
+    } else {
+        try {
+            $o = ($body | ConvertFrom-Json).($cfg.price.contract.ToLower())
+            $priceLine = Format-Message $M.priceLine @{
+                symbol = $cfg.price.symbol
+                usd    = [math]::Round($o.usd, 2)
+                cap    = [math]::Round($o.usd_market_cap / 1e6, 2)
+                change = [math]::Round($o.usd_24h_change, 1)
+            }
+            $threshold = if ($cfg.price.alertChangePercent) { $cfg.price.alertChangePercent } else { 30 }
+            if ([math]::Abs($o.usd_24h_change) -ge $threshold) {
+                $alerts.Add((Format-Message $M.priceMove @{
+                    change = [math]::Round($o.usd_24h_change, 1) }))
+            }
+        } catch { $notes.Add($M.priceFailed) }
+    }
+}
+
 # --- write log --------------------------------------------------------------
 
 Write-JsonFile $statePath $state
@@ -286,10 +334,11 @@ if ($alerts.Count -gt 0) {
     [void]$out.AppendLine('')
     [void]$out.AppendLine("=========== $stamp - $($M.headerChanged) ===========")
     foreach ($a in $alerts) { [void]$out.AppendLine("!! $a") }
+    if ($priceLine) { [void]$out.AppendLine("   $priceLine") }
     foreach ($n in $notes)  { [void]$out.AppendLine("   . $n") }
     [void]$out.AppendLine('===============================================')
 } else {
-    [void]$out.AppendLine("$stamp  $($M.headerQuiet)")
+    [void]$out.AppendLine("$stamp  $($M.headerQuiet). $priceLine".TrimEnd())
     foreach ($n in $notes) { [void]$out.AppendLine("   . $n") }
 }
 

@@ -20,5 +20,13 @@
   "nameBaseline": "{chain}: baseline saved, {count} existing name matches recorded (mostly impostors)",
   "nameNew": "NEW contracts on {chain} that do not match the impostor template ({count}) - check by hand:",
   "nameJunk": "{chain}: +{count} new impostors on the template supply (noise, ignored)",
-  "nameNoNew": "{chain}: no new name matches"
+  "nameNoNew": "{chain}: no new name matches",
+
+  "siteUnreachable": "{url}: unreachable",
+  "siteUnchanged": "{url}: unchanged",
+  "siteMarkerGone": "SIGNAL: '{marker}' is gone from {url} - the page is being prepared",
+
+  "priceLine": "{symbol} ${usd}, cap ${cap}M, 24h {change}%",
+  "priceMove": "24h price move of {change}% - a sharp move often runs ahead of the news",
+  "priceFailed": "CoinGecko: price unavailable"
 }
