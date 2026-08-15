@@ -1,0 +1,12 @@
+{
+  "headerChanged": "SOMETHING CHANGED",
+  "headerQuiet": "no changes",
+
+  "fetchFailed": "{chain}: request failed for {label}",
+  "parseFailed": "{chain}: could not parse the response for {label}",
+
+  "addressAppeared": "*** MAIN SIGNAL: {label} ({address}) appeared on {chain} - {count} transaction(s). ***",
+  "addressGrew": "*** {label} ({address}) on {chain}: +{new} new transaction(s), {count} total ***",
+  "addressQuiet": "{chain}: {label} {short} - no new transactions ({count} total)",
+  "addressClean": "{chain}: {label} {short} is clean (0 transactions)"
+}

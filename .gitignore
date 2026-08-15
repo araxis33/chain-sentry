@@ -1,0 +1,14 @@
+# Runtime output — never commit a user's watch state or logs
+state/
+*.log
+*-state.json
+*-baseline.json
+
+# Local-only configs (keep the shipped examples, ignore private ones)
+config/local.*.json
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

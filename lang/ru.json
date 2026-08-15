@@ -1,0 +1,12 @@
+{
+  "headerChanged": "ЕСТЬ ИЗМЕНЕНИЯ",
+  "headerQuiet": "БЕЗ ИЗМЕНЕНИЙ",
+
+  "fetchFailed": "{chain}: запрос по {label} не прошёл",
+  "parseFailed": "{chain}: разбор ответа по {label} не удался",
+
+  "addressAppeared": "*** ГЛАВНЫЙ СИГНАЛ: {label} ({address}) появился в сети {chain} — транзакций: {count}. ***",
+  "addressGrew": "*** {label} ({address}) в сети {chain}: +{new} новых транзакций (всего {count}) ***",
+  "addressQuiet": "{chain}: {label} {short} — новых транзакций нет (всего {count})",
+  "addressClean": "{chain}: {label} {short} чист (0 транзакций)"
+}
