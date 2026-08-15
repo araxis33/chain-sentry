@@ -10,6 +10,10 @@
   "addressQuiet": "{chain}: {label} {short} - no new transactions ({count} total)",
   "addressClean": "{chain}: {label} {short} is clean (0 transactions)",
 
+  "addressBaseline": "{chain}: baseline recorded for {label} {short} - {count} existing transaction(s), watching from here",
+  "fundedBaseline": "{chain}: {label} had already funded {wallet} - recorded, watching from here",
+  "deployBaseline": "{chain}: watched wallet {short} already had {count} contract(s) - recorded, not reported as new",
+
   "fundedNew": "{label} funded a NEW wallet on {chain}: {wallet} - now being watched",
   "fundedFetchFailed": "{chain}: request failed for watched wallet {short}",
   "fundedQuiet": "{chain}: watched wallet {short} deployed nothing new",

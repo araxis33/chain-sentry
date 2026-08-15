@@ -1,0 +1,42 @@
+{
+  "name": "Unipeg / uToken",
+  "language": "ru",
+  "outputDir": "C:\\Users\\User\\Desktop\\Robinhood Chain",
+
+  "chains": [
+    {
+      "name": "RH mainnet",
+      "explorer": "https://robinhoodchain.blockscout.com",
+      "followFunding": true,
+      "addresses": [
+        { "address": "0x02eD43292C6be3F49f2B287C499C77560E426E83", "label": "адрес команды" },
+        { "address": "0xf2A9A7330eB87CFBe8a5baB2aF66AdDB22F55042", "label": "деплоер тестнета" }
+      ],
+      "nameSearch": {
+        "queries": ["uToken", "utoken", "unipeg", "upeg"],
+        "ignoreSupply": "1000000000000000000000000000"
+      }
+    },
+    {
+      "name": "RH testnet",
+      "explorer": "https://explorer.testnet.chain.robinhood.com",
+      "addresses": [
+        { "address": "0xf2A9A7330eB87CFBe8a5baB2aF66AdDB22F55042", "label": "деплоер тестнета" }
+      ]
+    }
+  ],
+
+  "websites": [
+    {
+      "url": "https://utoken.gg/",
+      "markers": ["COMING\\s*SOON", "noindex", "<!--[\\s\\S]{0,300}og:description"]
+    }
+  ],
+
+  "price": {
+    "platform": "ethereum",
+    "contract": "0x44b28991b167582f18ba0259e0173176ca125505",
+    "symbol": "uPEG",
+    "alertChangePercent": 30
+  }
+}

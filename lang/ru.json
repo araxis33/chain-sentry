@@ -10,6 +10,10 @@
   "addressQuiet": "{chain}: {label} {short} — новых транзакций нет (всего {count})",
   "addressClean": "{chain}: {label} {short} чист (0 транзакций)",
 
+  "addressBaseline": "{chain}: зафиксирован старт по «{label}» {short} — уже есть транзакций: {count}, слежу дальше",
+  "fundedBaseline": "{chain}: «{label}» уже финансировал {wallet} — записано, слежу дальше",
+  "deployBaseline": "{chain}: у наблюдаемого кошелька {short} уже было контрактов: {count} — записано, за новые не выдаю",
+
   "fundedNew": "{label} профинансировал НОВЫЙ кошелёк в сети {chain}: {wallet} — взят под наблюдение",
   "fundedFetchFailed": "{chain}: запрос по наблюдаемому кошельку {short} не прошёл",
   "fundedQuiet": "{chain}: наблюдаемый кошелёк {short} ничего нового не задеплоил",

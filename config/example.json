@@ -1,0 +1,42 @@
+{
+  "name": "Example project",
+  "language": "en",
+  "outputDir": "C:\\Users\\You\\Desktop\\Example",
+
+  "chains": [
+    {
+      "name": "Some mainnet",
+      "explorer": "https://blockscout.example.com",
+      "followFunding": true,
+      "addresses": [
+        { "address": "0x0000000000000000000000000000000000000000", "label": "team deployer" },
+        { "address": "0x1111111111111111111111111111111111111111", "label": "contract owner" }
+      ],
+      "nameSearch": {
+        "queries": ["example", "exmpl"],
+        "ignoreSupply": "1000000000000000000000000000"
+      }
+    },
+    {
+      "name": "Some testnet",
+      "explorer": "https://blockscout-testnet.example.com",
+      "addresses": [
+        { "address": "0x0000000000000000000000000000000000000000", "label": "team deployer" }
+      ]
+    }
+  ],
+
+  "websites": [
+    {
+      "url": "https://example.com/",
+      "markers": ["COMING SOON", "noindex"]
+    }
+  ],
+
+  "price": {
+    "platform": "ethereum",
+    "contract": "0x2222222222222222222222222222222222222222",
+    "symbol": "EXMPL",
+    "alertChangePercent": 30
+  }
+}

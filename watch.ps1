@@ -112,8 +112,9 @@ foreach ($chain in @($cfg.chains)) {
     $cs = $state['chains'][$chainName]
     if (-not $cs.ContainsKey('tx'))     { $cs['tx'] = @{} }
     if (-not $cs.ContainsKey('funded')) { $cs['funded'] = @{} }
-    $txState     = ConvertTo-Hashtable $cs['tx']
-    $fundedState = ConvertTo-Hashtable $cs['funded']
+    $txState         = ConvertTo-Hashtable $cs['tx']
+    $fundedState     = ConvertTo-Hashtable $cs['funded']
+    $baselineWallets = New-Object System.Collections.Generic.HashSet[string]
 
     foreach ($entry in @($chain.addresses)) {
         $addr  = $entry.address
@@ -133,29 +134,54 @@ foreach ($chain in @($cfg.chains)) {
             continue
         }
 
-        $count = $items.Count
-        $key   = $addr.ToLower()
-        $was   = 0
-        if ($txState.ContainsKey($key)) { $was = [int]$txState[$key] }
+        $key        = $addr.ToLower()
+        $count      = $items.Count
+        $isBaseline = -not $txState.ContainsKey($key)
 
-        # Alert on the *increase* only. Alerting on "count > 0" would repeat the
-        # same discovery every single run and train the reader to ignore the log.
-        if ($count -gt 0 -and $was -eq 0) {
-            $alerts.Add((Format-Message $M.addressAppeared @{
-                chain = $chainName; label = $label; address = $addr; count = $count }))
-        } elseif ($count -gt $was) {
-            $alerts.Add((Format-Message $M.addressGrew @{
-                chain = $chainName; label = $label; address = $addr
-                new = ($count - $was); count = $count }))
-        } elseif ($count -gt 0) {
-            $notes.Add((Format-Message $M.addressQuiet @{
+        # Compare by newest timestamp, not by transaction count. The explorer
+        # pages at 50 results, so a busy address reports 50 forever and its new
+        # transactions would never register as a change.
+        $newest = $null
+        foreach ($t in $items) {
+            $ts = [datetime]::Parse($t.timestamp).ToUniversalTime()
+            if ($null -eq $newest -or $ts -gt $newest) { $newest = $ts }
+        }
+        $newestText = if ($newest) { $newest.ToString('yyyy-MM-ddTHH:mm:ssZ') } else { '' }
+
+        if ($isBaseline) {
+            # First run for this address: record what is already there instead of
+            # announcing it. "Appeared" has to mean it appeared while we watched,
+            # otherwise every historical transaction is breaking news on day one.
+            $notes.Add((Format-Message $M.addressBaseline @{
                 chain = $chainName; label = $label; short = $short; count = $count }))
         } else {
-            $notes.Add((Format-Message $M.addressClean @{
-                chain = $chainName; label = $label; short = $short }))
+            $seenBefore = [string]$txState[$key]
+            $newer = 0
+            if ($seenBefore) {
+                $cutoff = [datetime]::Parse($seenBefore).ToUniversalTime()
+                $newer  = @($items | Where-Object {
+                    [datetime]::Parse($_.timestamp).ToUniversalTime() -gt $cutoff }).Count
+            } else {
+                $newer = $count
+            }
+
+            if ($newer -gt 0 -and -not $seenBefore) {
+                $alerts.Add((Format-Message $M.addressAppeared @{
+                    chain = $chainName; label = $label; address = $addr; count = $newer }))
+            } elseif ($newer -gt 0) {
+                $alerts.Add((Format-Message $M.addressGrew @{
+                    chain = $chainName; label = $label; address = $addr
+                    new = $newer; count = $count }))
+            } elseif ($count -gt 0) {
+                $notes.Add((Format-Message $M.addressQuiet @{
+                    chain = $chainName; label = $label; short = $short; count = $count }))
+            } else {
+                $notes.Add((Format-Message $M.addressClean @{
+                    chain = $chainName; label = $label; short = $short }))
+            }
         }
 
-        $txState[$key] = $count
+        $txState[$key] = $newestText
 
         # Follow the money. Teams rarely deploy from the wallet you are
         # watching -- they fund a fresh one first and deploy from that. So any
@@ -171,8 +197,16 @@ foreach ($chain in @($cfg.chains)) {
                 $w = $t.to.hash.ToLower()
                 if (-not $fundedState.ContainsKey($w)) {
                     $fundedState[$w] = @()
-                    $alerts.Add((Format-Message $M.fundedNew @{
-                        chain = $chainName; label = $label; wallet = $t.to.hash }))
+                    if ($isBaseline) {
+                        # Funding found while establishing the baseline is history,
+                        # not news. Record the wallet quietly and start from there.
+                        [void]$baselineWallets.Add($w)
+                        $notes.Add((Format-Message $M.fundedBaseline @{
+                            chain = $chainName; label = $label; wallet = $t.to.hash }))
+                    } else {
+                        $alerts.Add((Format-Message $M.fundedNew @{
+                            chain = $chainName; label = $label; wallet = $t.to.hash }))
+                    }
                 }
             }
         }
@@ -203,7 +237,10 @@ foreach ($chain in @($cfg.chains)) {
                     contract = $contract; time = $t.timestamp }))
             }
 
-            if ($fresh.Count -gt 0) {
+            if ($fresh.Count -gt 0 -and $baselineWallets.Contains($w)) {
+                $notes.Add((Format-Message $M.deployBaseline @{
+                    chain = $chainName; short = $w.Substring(0, 10); count = $fresh.Count }))
+            } elseif ($fresh.Count -gt 0) {
                 $alerts.Add((Format-Message $M.deployFound @{
                     chain = $chainName; wallet = $w; count = $fresh.Count }))
                 foreach ($f in $fresh) { $alerts.Add("    -> $f") }
