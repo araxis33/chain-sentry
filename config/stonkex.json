@@ -1,0 +1,48 @@
+{
+  "name": "STONKEX / The Stonks Exchange",
+  "language": "ru",
+  "stateFile": "state/stonkex-state.json",
+  "logFile": "state/stonkex.log",
+  "keepDays": 60,
+  "alertOnRecovery": true,
+  "windowDays": 2,
+  "seedDays": 5,
+
+  "rpc": [
+    "https://base-rpc.publicnode.com",
+    "https://mainnet.base.org",
+    "https://base.llamarpc.com"
+  ],
+
+  "watch": {
+    "token": "0x5ab000ff9b9ffe0349ce5ffa5fd86f217c3680f5",
+    "locker": "0x71d1d363176723f85d98b8b430df33cde89f0a7f",
+    "deadAddress": "0x000000000000000000000000000000000000dead",
+
+    "quoteNative": "0x4200000000000000000000000000000000000006",
+    "equityPrefix": "0xb2000000",
+    "equityDecimals": 8,
+
+    "topicPositionRegistered": "0xe0b8e7859b1893ef8f2839ae4210ea6d4e67ce16bf8e0f3940c63242fc703adf",
+    "topicFeesCollected": "0x459620a42944682fc6a92e3e44054d9716be61dad6110471b65ea0baf54fc282",
+
+    "balanceOfSelector": "0x70a08231",
+    "totalSupplySelector": "0x18160ddd",
+
+    "childScanLimit": 120
+  },
+
+  "thresholds": {
+    "launchesPerDayBelow": 3,
+    "launchesLowForDays": 3,
+    "revenueUsdPerDayBelow": 300,
+    "burnStalledHours": 24,
+    "burnMinTokens": 1000,
+    "topChildMcapAbove": 1000000
+  },
+
+  "notify": {
+    "tokenEnv": "TELEGRAM_BOT_TOKEN",
+    "chatEnv": "TELEGRAM_CHAT_ID"
+  }
+}

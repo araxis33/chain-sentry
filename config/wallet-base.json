@@ -1,0 +1,24 @@
+{
+  "name": "Кошелёк на Base",
+  "profile": "wallet",
+  "language": "ru",
+  "stateFile": "state/wallet-base-state.json",
+  "watch": {
+    "address": "0x0000000000000000000000000000000000000000",
+    "explorer": "https://base.blockscout.com/api",
+    "minUsd": 1,
+    "rpc": [
+      "https://base-rpc.publicnode.com",
+      "https://mainnet.base.org",
+      "https://base.llamarpc.com"
+    ]
+  },
+  "thresholds": {
+    "totalMovePercent": 20,
+    "liquidityBelowUsd": 25000
+  },
+  "notify": {
+    "tokenEnv": "TELEGRAM_BOT_TOKEN",
+    "chatEnv": "TELEGRAM_CHAT_ID"
+  }
+}

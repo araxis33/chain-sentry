@@ -1,0 +1,23 @@
+{
+  "name": "Проекты под наблюдением",
+  "profile": "tokens",
+  "language": "ru",
+  "stateFile": "state/watchlist-state.json",
+
+  "watch": {
+    "tokens": [
+      { "label": "Index",    "address": "0x56910d4409f3a0c78c64dd8d0545ff0705389870" },
+      { "label": "PROLOGUE", "address": "0xb9972ca7188e511174947e3936a5315ac7073277" }
+    ]
+  },
+
+  "thresholds": {
+    "movePercent": 25,
+    "liquidityBelowUsd": 200000
+  },
+
+  "notify": {
+    "tokenEnv": "TELEGRAM_BOT_TOKEN",
+    "chatEnv": "TELEGRAM_CHAT_ID"
+  }
+}
