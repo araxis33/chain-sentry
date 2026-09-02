@@ -188,6 +188,25 @@ python metrics-watch.py --config config/watchlist.json --dry-run       # measure
 Telegram credentials are read from the environment or from `--env-file`; configs hold
 only the variable NAMES, so a config is safe to commit.
 
+### How a message is coloured
+
+Telegram has no coloured text, so direction is carried by a marker at the head of each
+line — it survives the notification preview and copy-paste, which markup does not:
+
+| marker | means |
+|---|---|
+| 🟢 | up over the period, or a position healthy inside its range, or an alarm standing down |
+| 🔴 | down, or out of range, or a threshold crossed the wrong way |
+| 🟡 | still fine but close to an edge |
+| 🔵 | nothing to compare against yet: a total, a baseline, a coin with no market data |
+| 📊 | the digest header |
+
+The markers live in `lang/metrics.*.json` under `marks`, next to the sentences, so a
+translation can change them and the engine stays ASCII. Messages are sent as HTML for
+bold headers and key numbers, everything interpolated into them is escaped first — a
+token symbol is text somebody else chose — and a message Telegram refuses over its
+markup is sent again as plain text rather than dropped.
+
 ## Limitations
 
 - `watch.ps1` reads the first page of transactions per address (50 on Blockscout). An

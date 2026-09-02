@@ -32,8 +32,10 @@ environment, or from an env file named with --env-file (KEY=value per line).
 
 import argparse
 import datetime as dt
+import html
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -441,14 +443,15 @@ def measure_wallet(cfg, log, known=None):
     }
 
 
-def digest_wallet(now, text):
-    lines = [text["walletTotal"].format(
-        total=fmt_usd(now["totalUsd"]), kept=len(now["holdings"]), spam=now["spamCount"])]
+def digest_wallet(now, text, previous_total=None):
+    change = (now["totalUsd"] - previous_total) if previous_total else None
+    lines = [by_sign(text, change) + " " + text["walletTotal"].format(
+        total=bold(fmt_usd(now["totalUsd"])), kept=len(now["holdings"]), spam=now["spamCount"])]
     for holding in now["holdings"][:8]:
         change = holding.get("change24")
-        change_text = ("%+.1f%%" % change) if isinstance(change, (int, float)) else "-"
-        lines.append(text["walletLine"].format(
-            symbol=holding["symbol"], usd=fmt_usd(holding["usd"]), change=change_text))
+        lines.append("%s %s" % (by_sign(text, change), text["walletLine"].format(
+            symbol=esc(holding["symbol"]), usd=fmt_usd(holding["usd"]),
+            change=fmt_change(change))))
     return "\n".join(lines)
 
 
@@ -461,16 +464,16 @@ def evaluate_wallet(cfg, now, state, text):
     if previous and previous > 0:
         move = (now["totalUsd"] - previous) / previous * 100
         if abs(move) >= th["totalMovePercent"]:
-            alerts.append(text["walletMoved"].format(
-                move=round(move, 1), was=fmt_usd(previous), now=fmt_usd(now["totalUsd"])))
+            alerts.append(by_sign(text, move) + " " + text["walletMoved"].format(
+                move=round(move, 1), was=fmt_usd(previous), now=bold(fmt_usd(now["totalUsd"]))))
 
     # Liquidity draining under a holding is the early warning a price chart gives too late.
     thin = [h for h in now["holdings"] if 0 < h["liquidity"] < th["liquidityBelowUsd"]]
     for holding in thin:
         key = "thin:" + holding["address"]
         if not flags.get(key):
-            alerts.append(text["walletThin"].format(
-                symbol=holding["symbol"], liq=fmt_usd(holding["liquidity"]),
+            alerts.append(mark(text, "alarm") + " " + text["walletThin"].format(
+                symbol=esc(holding["symbol"]), liq=fmt_usd(holding["liquidity"]),
                 limit=fmt_usd(th["liquidityBelowUsd"]), usd=fmt_usd(holding["usd"])))
         flags[key] = True
     for key in [k for k in flags if k.startswith("thin:")]:
@@ -506,13 +509,13 @@ def digest_tokens(now, text):
     lines = []
     for row in now["rows"]:
         if not row["found"]:
-            lines.append(text["tokenMissing"].format(label=row["label"]))
+            lines.append("%s %s" % (mark(text, "info"),
+                                    text["tokenMissing"].format(label=esc(row["label"]))))
             continue
         change = row.get("change24")
-        change_text = ("%+.1f%%" % change) if isinstance(change, (int, float)) else "-"
-        lines.append(text["tokenLine"].format(
-            label=row["label"], price=fmt_usd(row["price"]), change=change_text,
-            cap=fmt_usd(row["marketCap"]), liq=fmt_usd(row["liquidity"])))
+        lines.append("%s %s" % (by_sign(text, change), text["tokenLine"].format(
+            label=esc(row["label"]), price=fmt_usd(row["price"]), change=fmt_change(change),
+            cap=fmt_usd(row["marketCap"]), liq=fmt_usd(row["liquidity"]))))
     return "\n".join(lines)
 
 
@@ -527,14 +530,15 @@ def evaluate_tokens(cfg, now, state, text):
         if isinstance(change, (int, float)) and abs(change) >= th["movePercent"]:
             key = "move:%s:%s" % (row["address"], day_key(now["measuredAt"]))
             if not flags.get(key):
-                alerts.append(text["tokenMoved"].format(
-                    label=row["label"], change=round(change, 1), price=fmt_usd(row["price"])))
+                alerts.append(by_sign(text, change) + " " + text["tokenMoved"].format(
+                    label=esc(row["label"]), change=round(change, 1),
+                    price=bold(fmt_usd(row["price"]))))
                 flags[key] = True
         thin_key = "thin:" + row["address"]
         is_thin = 0 < row["liquidity"] < th["liquidityBelowUsd"]
         if is_thin and not flags.get(thin_key):
-            alerts.append(text["tokenThin"].format(
-                label=row["label"], liq=fmt_usd(row["liquidity"]),
+            alerts.append(mark(text, "alarm") + " " + text["tokenThin"].format(
+                label=esc(row["label"]), liq=fmt_usd(row["liquidity"]),
                 limit=fmt_usd(th["liquidityBelowUsd"])))
         flags[thin_key] = is_thin
 
@@ -672,6 +676,8 @@ def measure_lp(cfg, rpc, log):
             "sharePercent": (100.0 * shares / total_shares) if total_shares else 0.0,
             "stockPercent": (100.0 * amount0 * price / value) if value else 0.0,
         })
+        rows[-1]["nearest"] = min(rows[-1]["toLow"], rows[-1]["toHigh"])
+        rows[-1]["near"] = rows[-1]["inside"] and rows[-1]["nearest"] <= cfg["thresholds"]["edgePercent"]
         log("%s: tick %d in [%d, %d], %s, %s, fees %s" % (
             rows[-1]["label"], tick, tick_lower, tick_upper,
             "inside" if rows[-1]["inside"] else "OUT OF RANGE",
@@ -683,18 +689,19 @@ def digest_lp(now, text):
     lines = []
     for row in now["rows"]:
         if row["inside"]:
-            lines.append(text["lpLine"].format(
-                label=row["label"], price=fmt_usd(row["price"]),
+            lines.append("%s %s" % (mark(text, "warn" if row["near"] else "up"),
+                         text["lpLine"].format(
+                label=esc(row["label"]), price=bold(fmt_usd(row["price"])),
                 low=fmt_usd(row["low"]), high=fmt_usd(row["high"]),
                 at=round(row["atPercent"]), down=round(row["toLow"], 2), up=round(row["toHigh"], 2),
-                stock=round(row["stockPercent"]), symbol=row["symbol0"],
-                value=fmt_usd(row["valueUsd"]), fees=fmt_small(row["feesUsd"])))
+                stock=round(row["stockPercent"]), symbol=esc(row["symbol0"]),
+                value=fmt_usd(row["valueUsd"]), fees=fmt_small(row["feesUsd"]))))
         else:
             side = text["lpBelow"] if row["price"] <= row["low"] else text["lpAbove"]
-            lines.append(text["lpLineOut"].format(
-                label=row["label"], price=fmt_usd(row["price"]), side=side,
+            lines.append("%s %s" % (mark(text, "down"), text["lpLineOut"].format(
+                label=esc(row["label"]), price=bold(fmt_usd(row["price"])), side=side,
                 low=fmt_usd(row["low"]), high=fmt_usd(row["high"]),
-                value=fmt_usd(row["valueUsd"]), fees=fmt_small(row["feesUsd"])))
+                value=fmt_usd(row["valueUsd"]), fees=fmt_small(row["feesUsd"]))))
     return "\n".join(lines)
 
 
@@ -709,12 +716,13 @@ def evaluate_lp(cfg, now, state, text):
         is_out = not row["inside"]
         if is_out and not was_out:
             side = text["lpBelow"] if row["price"] <= row["low"] else text["lpAbove"]
-            alerts.append(text["lpOut"].format(
-                label=row["label"], side=side, price=fmt_usd(row["price"]),
+            alerts.append(mark(text, "alarm") + " " + text["lpOut"].format(
+                label=esc(row["label"]), side=side, price=bold(fmt_usd(row["price"])),
                 low=fmt_usd(row["low"]), high=fmt_usd(row["high"])))
         elif was_out and not is_out:
-            alerts.append(text["lpBack"].format(
-                label=row["label"], price=fmt_usd(row["price"]), at=round(row["atPercent"])))
+            alerts.append(mark(text, "up") + " " + text["lpBack"].format(
+                label=esc(row["label"]), price=bold(fmt_usd(row["price"])),
+                at=round(row["atPercent"])))
         flags[out_key] = is_out
 
         edge_key = "edge:" + row["label"]
@@ -722,8 +730,8 @@ def evaluate_lp(cfg, now, state, text):
         near = row["inside"] and nearest <= limit
         if near and not flags.get(edge_key, False):
             side = text["lpBelow"] if row["toLow"] <= row["toHigh"] else text["lpAbove"]
-            alerts.append(text["lpEdge"].format(
-                label=row["label"], side=side, gap=round(nearest, 2),
+            alerts.append(mark(text, "warn") + " " + text["lpEdge"].format(
+                label=esc(row["label"]), side=side, gap=round(nearest, 2),
                 limit=limit, price=fmt_usd(row["price"]), fees=fmt_small(row["feesUsd"])))
         flags[edge_key] = near
     return alerts, flags
@@ -741,9 +749,10 @@ def evaluate(cfg, now, state, text):
         was = flags.get(name, False)
         flags[name] = active
         if active and not was:
-            alerts.append(message)
+            alerts.append(mark(text, "alarm") + " " + message)
         elif was and not active and cfg.get("alertOnRecovery", True):
-            alerts.append(text["recovered"].format(what=text["names"][name]))
+            alerts.append(mark(text, "up") + " "
+                          + text["recovered"].format(what=text["names"][name]))
 
     days = sorted(now["launchesByDay"])
     completed = [d for d in days if d != day_key(now["measuredAt"])]
@@ -789,6 +798,37 @@ def evaluate(cfg, now, state, text):
     return alerts, flags, history, rev_history
 
 
+# --------------------------------------------------------------- presentation
+
+def esc(value):
+    """Telegram parses the message as HTML, and a token symbol is attacker-chosen text."""
+    return html.escape(str(value), quote=False)
+
+
+def bold(value):
+    return "<b>" + esc(value) + "</b>"
+
+
+def mark(text, kind):
+    """Telegram has no coloured text. A coloured circle in front of the line is the
+    closest thing to it, and it survives copy-paste and notification previews."""
+    return text.get("marks", {}).get(kind, "")
+
+
+def by_sign(text, change, flat="flat"):
+    if not isinstance(change, (int, float)):
+        return mark(text, "info")
+    if change > 0:
+        return mark(text, "up")
+    if change < 0:
+        return mark(text, "down")
+    return mark(text, flat)
+
+
+def fmt_change(change):
+    return ("%+.1f%%" % change) if isinstance(change, (int, float)) else "-"
+
+
 def fmt_usd(value):
     value = float(value or 0)
     if value >= 1_000_000:
@@ -800,34 +840,59 @@ def fmt_usd(value):
     return "$%.6f" % value
 
 
-def digest(now, text):
+def digest(now, text, previous_price=None):
     days = sorted(now["launchesByDay"])
     today = day_key(now["measuredAt"])
     completed = [d for d in days if d != today]
     last = completed[-1] if completed else today
-    return text["digest"].format(
-        day=last,
-        launches=now["launchesByDay"].get(last, 0),
-        revenue=round(now["revenueByDay"].get(last, 0)),
-        burned=round(now["burned"]),
-        burnedPercent=round(now["burnedPercent"], 2),
-        child=fmt_usd(now.get("topChildMcap", 0)),
-        childSymbol=now.get("topChildSymbol") or "-",
-        price=fmt_usd(now["price"]),
-        cap=fmt_usd(now["marketCap"]),
-        liquidity=fmt_usd(now["liquidity"]),
-    )
+
+    # The day line is marked against the day before it, the market line against the
+    # price at the last run: a number on its own says nothing about direction.
+    revenue = now["revenueByDay"].get(last, 0)
+    earlier = [d for d in completed if d < last]
+    revenue_before = now["revenueByDay"].get(earlier[-1]) if earlier else None
+    day_change = (revenue - revenue_before) if revenue_before is not None else None
+    price_change = (now["price"] - previous_price) if previous_price else None
+
+    return "\n".join([
+        "%s %s" % (by_sign(text, day_change), text["digestDay"].format(
+            day=last, launches=now["launchesByDay"].get(last, 0),
+            revenue=bold(fmt_usd(revenue)))),
+        "%s %s" % (mark(text, "info"), text["digestBurn"].format(
+            burned=format(int(round(now["burned"])), ","),
+            burnedPercent=round(now["burnedPercent"], 2))),
+        "%s %s" % (mark(text, "info"), text["digestChild"].format(
+            childSymbol=esc(now.get("topChildSymbol") or "-"),
+            child=fmt_usd(now.get("topChildMcap", 0)))),
+        "%s %s" % (by_sign(text, price_change), text["digestMarket"].format(
+            price=bold(fmt_usd(now["price"])), cap=fmt_usd(now["marketCap"]),
+            liquidity=fmt_usd(now["liquidity"]))),
+    ])
+
+
+def strip_tags(message):
+    return re.sub(r"</?b>", "", message)
 
 
 def telegram(token, chat_id, message, log):
     url = "https://api.telegram.org/bot%s/sendMessage" % token
-    payload = {"chat_id": chat_id, "text": message, "disable_web_page_preview": True}
+    payload = {"chat_id": chat_id, "text": message, "disable_web_page_preview": True,
+               "parse_mode": "HTML"}
     try:
         out = http_json(url, payload, retries=2)
         if out.get("ok"):
             log("telegram: sent")
             return True
         log("telegram: rejected -- %s" % out.get("description"))
+        # A message refused over its markup should still arrive: the numbers in it
+        # matter more than the bold. Send it again as plain text.
+        payload.pop("parse_mode")
+        payload["text"] = strip_tags(message)
+        out = http_json(url, payload, retries=2)
+        if out.get("ok"):
+            log("telegram: sent as plain text")
+            return True
+        log("telegram: rejected again -- %s" % out.get("description"))
     except Exception as exc:  # noqa: BLE001
         log("telegram: failed -- %s" % exc)
     return False
@@ -872,7 +937,7 @@ def process_one(cfg_path, log):
         now = measure_wallet(cfg, log, state.get("knownTokens"))
         log("holdings: %d worth %s, %d spam tokens ignored" % (
             len(now["holdings"]), fmt_usd(now["totalUsd"]), now["spamCount"]))
-        body = digest_wallet(now, text)
+        body = digest_wallet(now, text, state.get("totalUsd"))
         alerts, flags = ([], {}) if first_run else evaluate_wallet(cfg, now, state, text)
         state_out = {
             "baseline": True,
@@ -898,7 +963,7 @@ def process_one(cfg_path, log):
         log("market:   price %s, cap %s, liquidity %s" % (
             fmt_usd(now["price"]), fmt_usd(now["marketCap"]), fmt_usd(now["liquidity"])))
 
-        body = digest(now, text)
+        body = digest(now, text, state.get("lastPrice"))
         if first_run:
             alerts, flags = [], {}
             history = dict(now["launchesByDay"])
@@ -977,16 +1042,19 @@ def main():
 
     blocks = []
     if alerts:
-        blocks.append(text["combinedAlertHeader"])
-        blocks.extend("[%s]\n%s" % (name, alert) for name, alert in alerts)
+        blocks.append(mark(text, "alarm") + " " + bold(text["combinedAlertHeader"]))
+        blocks.extend("%s\n%s" % (bold(name), alert) for name, alert in alerts)
     if alerts or not args.alerts_only:
-        blocks.append(text["combinedDigestHeader"].format(date=stamp))
-        blocks.extend("[%s]\n%s" % (r["name"], r["body"]) for r in results)
+        blocks.append(mark(text, "digest") + " "
+                      + bold(text["combinedDigestHeader"].format(date=stamp)))
+        blocks.extend("%s\n%s" % (bold(r["name"]), r["body"]) for r in results)
         new_ones = [r["name"] for r in results if r["firstRun"]]
         if new_ones:
-            blocks.append(text["baselineNote"].format(names=", ".join(new_ones)))
+            blocks.append(mark(text, "info") + " "
+                          + text["baselineNote"].format(names=esc(", ".join(new_ones))))
     if failed and blocks:
-        blocks.append(text["someFailed"].format(names=", ".join(failed)))
+        blocks.append(mark(text, "alarm") + " "
+                      + text["someFailed"].format(names=esc(", ".join(failed))))
 
     message = "\n\n".join(blocks)
     if not message:

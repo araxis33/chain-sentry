@@ -1,43 +1,46 @@
 {
+  "marks": {
+    "up": "🟢",
+    "down": "🔴",
+    "flat": "⚪",
+    "info": "🔵",
+    "warn": "🟡",
+    "alarm": "🔴",
+    "digest": "📊"
+  },
   "baselineWritten": "первый прогон: записана база, тревоги не шлём",
   "nothingChanged": "без изменений, слать нечего",
-
   "combinedAlertHeader": "СИГНАЛ",
   "combinedDigestHeader": "Сводка за {date}",
   "baselineNote": "Впервые под наблюдением: {names}. Записал точку отсчёта, дальше сравниваю с ней.",
   "someFailed": "Не удалось снять показания: {names}. Посмотрю в следующий прогон.",
-
   "launchesDying": "ЗАПУСКИ ВЫДЫХАЮТСЯ: меньше {limit} в сутки уже {days} дня подряд ({values}). Это тот самый порог, после которого выкуп и сжигание кормить нечем.",
   "revenueDead": "ВЫРУЧКА УПАЛА НИЖЕ ПОРОГА: за {day} платформа заработала ${value} при пороге ${limit}. Выкуп на такие деньги перестаёт быть значимым.",
   "burnStalled": "СЖИГАНИЕ ОСТАНОВИЛОСЬ: не двигалось {hours} ч. Сжигание делается вручную функцией владельца, так что остановка означает смену политики, а не поломку.",
   "childHit": "ЛОНЧПАД ЗАРАБОТАЛ: дочерняя монета {symbol} доросла до {cap} при пороге {limit}. Это первый признак, что платформа делает не только сам себя.",
-
   "walletMoved": "КОШЕЛЁК ДВИНУЛСЯ НА {move}%: было {was}, стало {now}.",
   "walletThin": "ЛИКВИДНОСТЬ ТОНКАЯ: под {symbol} осталось {liq} при пороге {limit}, а у тебя там {usd}. Из такого пула выйти по цене на экране уже не получится.",
-
   "recovered": "Отбой: {what} вернулось в норму.",
-
   "names": {
     "launchesDying": "число запусков",
     "revenueDead": "выручка",
     "burnStalled": "сжигание",
     "childHit": "капа лучшей дочерней монеты"
   },
-
-  "digest": "За {day}: запусков {launches}, выручка ${revenue}.\nСожжено всего {burned} токенов ({burnedPercent}% эмиссии).\nЛучшая дочерняя монета: {childSymbol} на {child}.\nЦена {price}, капа {cap}, ликвидность {liquidity}.",
-
+  "digestDay": "За {day}: запусков {launches}, выручка {revenue}.",
+  "digestBurn": "Сожжено всего {burned} токенов ({burnedPercent}% эмиссии).",
+  "digestChild": "Лучшая дочерняя монета: {childSymbol} на {child}.",
+  "digestMarket": "Цена {price}, капа {cap}, ликвидность {liquidity}.",
   "walletTotal": "Всего {total} в {kept} монетах (спам отброшен: {spam}).",
-  "walletLine": "  {symbol}: {usd}  за сутки {change}",
-
-  "tokenLine": "  {label}: {price}  за сутки {change}  капа {cap}  ликв. {liq}",
-  "tokenMissing": "  {label}: рыночных данных нет",
+  "walletLine": "{symbol}: {usd}  за сутки {change}",
+  "tokenLine": "{label}: {price}  за сутки {change}  капа {cap}  ликв. {liq}",
+  "tokenMissing": "{label}: рыночных данных нет",
   "tokenMoved": "{label} двинулся на {change}% за сутки, сейчас {price}.",
   "tokenThin": "ЛИКВИДНОСТЬ ТОНКАЯ: под {label} осталось {liq} при пороге {limit}.",
-
   "lpBelow": "ниже",
   "lpAbove": "выше",
-  "lpLine": "  {label}: {price} внутри {low}-{high} ({at}% от низа, до вылета вниз {down}%, вверх {up}%)\n    состав {stock}% {symbol}, стоимость {value}, комиссий накоплено {fees}",
-  "lpLineOut": "  {label}: {price} — это {side} диапазона {low}-{high}, позиция НЕ работает\n    стоимость {value}, комиссий накоплено {fees}",
+  "lpLine": "{label}: {price} внутри {low}-{high} ({at}% от низа, до вылета вниз {down}%, вверх {up}%)\n    состав {stock}% {symbol}, стоимость {value}, комиссий накоплено {fees}",
+  "lpLineOut": "{label}: {price} — это {side} диапазона {low}-{high}, позиция НЕ работает\n    стоимость {value}, комиссий накоплено {fees}",
   "lpOut": "ПОЗИЦИЯ ВЫШЛА ИЗ ДИАПАЗОНА: {label}, цена {price} — {side} границ {low}-{high}. Комиссии и пойнты не капают, пока цена не вернётся или ты не переставишь диапазон.",
   "lpBack": "{label} вернулась в диапазон, цена {price} ({at}% от низа). Снова зарабатывает.",
   "lpEdge": "ПОЗИЦИЯ У КРАЯ: {label} в {gap}% от того, чтобы вылететь {side} (порог {limit}%), цена {price}. Комиссий накоплено {fees}."

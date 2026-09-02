@@ -1,43 +1,46 @@
 {
+  "marks": {
+    "up": "🟢",
+    "down": "🔴",
+    "flat": "⚪",
+    "info": "🔵",
+    "warn": "🟡",
+    "alarm": "🔴",
+    "digest": "📊"
+  },
   "baselineWritten": "first run: baseline recorded, no alerts sent",
   "nothingChanged": "nothing changed, nothing to send",
-
   "combinedAlertHeader": "ALERT",
   "combinedDigestHeader": "Summary for {date}",
   "baselineNote": "Newly watched: {names}. Baseline recorded, everything from here is compared against it.",
   "someFailed": "Could not read: {names}. Will retry on the next run.",
-
   "launchesDying": "LAUNCHES ARE DYING OFF: fewer than {limit} a day for {days} days running ({values}). This is the threshold past which there is nothing left to fund the buyback and burn.",
   "revenueDead": "REVENUE BELOW THRESHOLD: on {day} the platform earned ${value} against a ${limit} floor. A buyback on that money stops mattering.",
   "burnStalled": "BURN HAS STOPPED: no movement for {hours}h. Burning is done by hand through an owner function, so a stop means the policy changed, not that something broke.",
   "childHit": "THE LAUNCHPAD DELIVERED: child coin {symbol} reached {cap} against a {limit} threshold. First sign the platform ships something other than itself.",
-
   "walletMoved": "WALLET MOVED {move}%: was {was}, now {now}.",
   "walletThin": "LIQUIDITY IS THIN: only {liq} sits under {symbol} against a {limit} floor, and you hold {usd} of it. You will not get out of that pool at the price on screen.",
-
   "recovered": "Stand down: {what} is back to normal.",
-
   "names": {
     "launchesDying": "launch count",
     "revenueDead": "revenue",
     "burnStalled": "burning",
     "childHit": "biggest child coin cap"
   },
-
-  "digest": "On {day}: {launches} launches, ${revenue} revenue.\nBurned so far {burned} tokens ({burnedPercent}% of supply).\nBiggest child coin: {childSymbol} at {child}.\nPrice {price}, cap {cap}, liquidity {liquidity}.",
-
+  "digestDay": "On {day}: {launches} launches, {revenue} revenue.",
+  "digestBurn": "Burned so far {burned} tokens ({burnedPercent}% of supply).",
+  "digestChild": "Biggest child coin: {childSymbol} at {child}.",
+  "digestMarket": "Price {price}, cap {cap}, liquidity {liquidity}.",
   "walletTotal": "{total} across {kept} coins (spam ignored: {spam}).",
-  "walletLine": "  {symbol}: {usd}  24h {change}",
-
-  "tokenLine": "  {label}: {price}  24h {change}  cap {cap}  liq {liq}",
-  "tokenMissing": "  {label}: no market data",
+  "walletLine": "{symbol}: {usd}  24h {change}",
+  "tokenLine": "{label}: {price}  24h {change}  cap {cap}  liq {liq}",
+  "tokenMissing": "{label}: no market data",
   "tokenMoved": "{label} moved {change}% in a day, now {price}.",
   "tokenThin": "LIQUIDITY IS THIN: only {liq} left under {label} against a {limit} floor.",
-
   "lpBelow": "below",
   "lpAbove": "above",
-  "lpLine": "  {label}: {price} inside {low}-{high} ({at}% up from the floor, {down}% to fall out, {up}% to run out the top)\n    holding {stock}% {symbol}, worth {value}, fees earned {fees}",
-  "lpLineOut": "  {label}: {price} is {side} the range {low}-{high} -- earning nothing\n    worth {value}, fees earned {fees}",
+  "lpLine": "{label}: {price} inside {low}-{high} ({at}% up from the floor, {down}% to fall out, {up}% to run out the top)\n    holding {stock}% {symbol}, worth {value}, fees earned {fees}",
+  "lpLineOut": "{label}: {price} is {side} the range {low}-{high} -- earning nothing\n    worth {value}, fees earned {fees}",
   "lpOut": "POSITION LEFT ITS RANGE: {label} at {price}, {side} {low}-{high}. It earns no fees and no points until the price comes back or you move the range.",
   "lpBack": "{label} is back inside its range at {price} ({at}% up from the floor). It is earning again.",
   "lpEdge": "POSITION IS AT THE EDGE: {label} is {gap}% {side} leaving its range (alert set at {limit}%), price {price}. Fees so far {fees}."
