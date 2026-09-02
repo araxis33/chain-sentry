@@ -135,14 +135,79 @@ alone. The script itself stays plain ASCII on purpose: Windows PowerShell 5.1
 corrupts non-ASCII source files that lack a byte order mark, and keeping the text
 in JSON sidesteps that entirely.
 
+## The second engine: `metrics-watch.py`
+
+`watch.ps1` watches **addresses** — it asks an explorer whether anything moved.
+`metrics-watch.py` watches **the numbers a project produces**, by reading event logs
+from an RPC node and doing the arithmetic itself. It keeps both design rules above:
+alert on a change of state, and stay silent on the first run while it records a baseline.
+
+Four profiles, chosen per config with `"profile"`:
+
+| profile | what it measures | alerts on |
+|---|---|---|
+| `launchpad` | launches per day, protocol revenue per day, tokens burned, biggest coin the platform shipped | a metric crossing a floor or ceiling you set |
+| `tokens` | a named watchlist: price, 24h move, market cap, liquidity | a daily move past `movePercent`, liquidity under `liquidityBelowUsd` |
+| `wallet` | what an address actually holds, airdrop spam filtered out by USD value | total value moving past `totalMovePercent`, liquidity draining under a holding |
+| `lp` | concentrated liquidity positions: whether the price is still inside the range, how far the nearest edge is, what the position now consists of, fees accrued | leaving the range, coming back into it, and coming within `edgePercent` of an edge |
+
+### The `lp` profile
+
+A concentrated position stops earning the moment the price leaves its range, and nothing
+tells you: the position is not a token in the wallet, and on a hook-based DEX it is not
+even an NFT — the hook keeps one shared position per range and hands out ERC-6909 shares
+for it. So the profile reads the hook directly:
+
+| call | what it gives |
+|---|---|
+| `rangeKey(id)` | the pool key and the range's two ticks |
+| `balanceOf(owner, id)` | the shares this owner holds in that range |
+| `rangeState(id)` | total shares and the range's fee-growth counters |
+| `userPosition(id, owner)` | what is owed, and this position's own checkpoints |
+| `StateView.getSlot0(poolId)` | the pool's current tick |
+
+Fees are not paid out and never appear in the wallet: they accumulate as a growth counter,
+and a position owns the growth since its own checkpoint —
+`owed + shares * (accFee - checkpoint) / 2**128`. That is the number a points programme
+scores, so it is reported even when it is cents.
+
+Distances to the edges are given in **percent of price**, not in ticks, because percent is
+what you can compare against how the coin actually moves. A config lists the positions by
+`hook`, `rangeId` and `poolId`; see `config/fables-lp.json`.
+
+Several `--config` flags fold into **one** message, so a morning digest is a single
+notification rather than one per project:
+
+```
+python metrics-watch.py --config config/stonkex.json --config config/watchlist.json \
+                        --env-file /path/to/.env
+python metrics-watch.py --config config/watchlist.json --alerts-only   # silent unless something crossed
+python metrics-watch.py --config config/watchlist.json --dry-run       # measure, never send, never touch state
+```
+
+Telegram credentials are read from the environment or from `--env-file`; configs hold
+only the variable NAMES, so a config is safe to commit.
+
 ## Limitations
 
-- Reads the first page of transactions per address (50 on Blockscout). An address
-  with more than 50 transactions in one day could have older ones missed.
-- Blockscout only. Etherscan-family explorers use a different API shape.
+- `watch.ps1` reads the first page of transactions per address (50 on Blockscout). An
+  address with more than 50 transactions in one day could have older ones missed.
+- `watch.ps1` is Blockscout only. Etherscan-family explorers use a different API shape.
 - Contract deployments are detected via `created_contract`, so internal
   deployments — a contract deploying another contract — are not reported.
-- No notifications. It writes a log; pair it with whatever you already read.
+- `metrics-watch.py` prices tokens through DexScreener, which returns a capped number
+  of pairs per request. Batches are kept small for that reason; a token in very many
+  pools can still under-report total liquidity.
+- The `wallet` profile needs an explorer that serves `action=tokenlist`. Public
+  Blockscout rate-limits it, so the call retries with backoff rather than failing fast.
+- The `lp` profile assumes the second currency of a pair is the dollar quote, which is
+  true for the stablecoin-quoted pools it was built against and wrong for a pool of two
+  volatile coins. It also assumes shares map one-to-one onto liquidity, which holds for
+  the hook it was written for; verify before pointing it at a different one.
+- Run it from a scheduler on Windows through `pythonw.exe`, not `python.exe`. A console
+  process there was being handed a close signal mid-run and dying with
+  `STATUS_CONTROL_C_EXIT` (`0xC000013A`), which looks exactly like a run that never
+  happened: the header in the log, nothing after it.
 
 ## Licence
 
