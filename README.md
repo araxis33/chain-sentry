@@ -207,6 +207,23 @@ bold headers and key numbers, everything interpolated into them is escaped first
 token symbol is text somebody else chose — and a message Telegram refuses over its
 markup is sent again as plain text rather than dropped.
 
+### `--card`: the digest as a picture, with real logos
+
+A bot cannot put an image inside a text message — custom emoji are limited to bots
+that own a username bought on Fragment — so a real project logo has to arrive as a
+photo. With `--card` the digest is drawn into a PNG (`digest_card.py`) and sent with
+`sendPhoto`: each row gets the project's own logo where the coloured dot would be, the
+colour moves to a strip down the right edge, and a liquidity range gets a bar showing
+where the price sits between its two edges. Logos come from the price feed and are
+cached under `state/logos/`.
+
+Alerts are never turned into a picture. They have to be readable in the notification
+preview, and a photo shows nothing there but its caption.
+
+Pillow is not a dependency of the engine: without it, or if anything in the drawing
+fails, `render()` returns `None` and the text digest goes exactly as before. The same
+happens if Telegram refuses the photo.
+
 ## Limitations
 
 - `watch.ps1` reads the first page of transactions per address (50 on Blockscout). An
