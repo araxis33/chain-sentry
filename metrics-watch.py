@@ -345,20 +345,34 @@ def measure_wallet(cfg, log, known=None):
     """
     w = cfg["watch"]
     address = w["address"]
-    url = "%s?module=account&action=tokenlist&address=%s" % (w["explorer"], address)
 
-    # Blockscout answers a rate limit with HTTP 200 and an empty result, so it looks
-    # like success to every transport check. Only the message says otherwise.
+    # A chain whose explorer will not talk to a script is still watchable: name the
+    # tokens in the config and every balance still comes from the chain, which is where
+    # it should come from anyway. Robinhood Chain's Blockscout sits behind Cloudflare
+    # and answers with 403, so this is not a hypothetical case.
+    configured = [{"symbol": t.get("symbol", "?"), "address": t["address"],
+                   "decimals": t.get("decimals", 18)} for t in w.get("tokens", [])]
+    if configured:
+        seen_known = {k["address"].lower() for k in (known or [])}
+        known = list(known or []) + [t for t in configured
+                                     if t["address"].lower() not in seen_known]
+
     entries, complaint, from_cache = None, "", False
-    for attempt in range(5):
-        listing = http_json(url, retries=1)
-        entries = listing.get("result")
-        if isinstance(entries, list):
-            break
-        complaint = str(listing.get("message") or listing)[:120]
-        entries = None
-        log("explorer said '%s', waiting" % complaint)
-        time.sleep(8 * (attempt + 1))
+    if w.get("explorer"):
+        url = "%s?module=account&action=tokenlist&address=%s" % (w["explorer"], address)
+        # Blockscout answers a rate limit with HTTP 200 and an empty result, so it looks
+        # like success to every transport check. Only the message says otherwise.
+        for attempt in range(5):
+            listing = http_json(url, retries=1)
+            entries = listing.get("result")
+            if isinstance(entries, list):
+                break
+            complaint = str(listing.get("message") or listing)[:120]
+            entries = None
+            log("explorer said '%s', waiting" % complaint)
+            time.sleep(8 * (attempt + 1))
+    else:
+        complaint = "no explorer configured for this chain"
 
     if entries is None:
         # Discovery is the ONLY thing the explorer is needed for -- every balance is
@@ -366,7 +380,9 @@ def measure_wallet(cfg, log, known=None):
         # whole report: fall back to the token list this wallet was already known to
         # hold and say so, rather than dropping the wallet out of the digest entirely.
         if known:
-            log("explorer unavailable (%s); reusing %d known tokens" % (complaint, len(known)))
+            log("%s; reading %d tokens straight from the chain" % (complaint, len(known))
+                if not w.get("explorer") else
+                "explorer unavailable (%s); reusing %d known tokens" % (complaint, len(known)))
             from_cache = True
             entries = [{"type": "ERC-20", "symbol": k["symbol"], "decimals": str(k.get("decimals", 18)),
                         "contractAddress": k["address"], "balance": "1"} for k in known]
@@ -427,7 +443,7 @@ def measure_wallet(cfg, log, known=None):
     # already been withdrawn in full. Discovery can come from the explorer, but the
     # NUMBER has to come from the chain. Only the ones that passed the value filter are
     # re-read, so this stays a handful of calls rather than one per airdrop.
-    real, ghosts = [], []
+    real, ghosts, empty = [], [], 0
     rpc = Rpc(w["rpc"])
     for holding in candidates:
         try:
@@ -441,7 +457,12 @@ def measure_wallet(cfg, log, known=None):
             real.append(holding)
             continue
         if onchain <= 0:
-            ghosts.append(holding["symbol"])
+            # An explorer claiming a balance the chain does not have is worth saying out
+            # loud. A configured token simply sitting at zero is not news, it just means
+            # the wallet does not hold it right now.
+            if not from_cache:
+                ghosts.append(holding["symbol"])
+            empty += 1
             continue
         holding["balance"] = onchain
         holding["usd"] = onchain * holding["price"]
@@ -459,7 +480,7 @@ def measure_wallet(cfg, log, known=None):
         "holdings": real,
         "totalUsd": sum(h["usd"] for h in real),
         "tokenCount": len(held),
-        "spamCount": len(held) - len(real),
+        "spamCount": max(0, len(held) - len(real) - empty),
     }
 
 

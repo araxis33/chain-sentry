@@ -234,8 +234,12 @@ happens if Telegram refuses the photo.
 - `metrics-watch.py` prices tokens through DexScreener, which returns a capped number
   of pairs per request. Batches are kept small for that reason; a token in very many
   pools can still under-report total liquidity.
-- The `wallet` profile needs an explorer that serves `action=tokenlist`. Public
-  Blockscout rate-limits it, so the call retries with backoff rather than failing fast.
+- The `wallet` profile discovers tokens through an explorer that serves
+  `action=tokenlist`. Public Blockscout rate-limits it, so the call retries with backoff
+  rather than failing fast. Where no explorer will talk to a script — Robinhood Chain's
+  sits behind Cloudflare and answers 403 — leave `explorer` out and name the tokens
+  under `watch.tokens` instead; discovery is the only thing the explorer was for, every
+  balance is read from the chain either way.
 - Token decimals are read from each token, never inferred from an address prefix. They
   used to be configured per prefix, and one token sharing the tokenized-stock prefix with
   18 decimals instead of 8 reported a day's revenue as a trillion dollars. When a token
