@@ -7,6 +7,10 @@ state/
 # Local-only configs (keep the shipped examples, ignore private ones)
 config/local.*.json
 
+# Python
+__pycache__/
+*.pyc
+
 # Editors / OS
 .vscode/
 .idea/
