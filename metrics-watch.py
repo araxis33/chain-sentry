@@ -281,17 +281,34 @@ def measure(cfg, rpc, log, days_back):
     prices = dexscreener_tokens(sorted(assets | {token}))
     native_price = prices.get(quote_native, {}).get("price", 0)
 
+    # Decimals belong to the token, not to the address prefix it shares with others.
+    # cbHYPE sits under the same 0xb2 prefix as the tokenized stocks and has 18 of
+    # them, not 8: assuming the configured default turned one $100 fee into $999bn
+    # and one day's revenue into a trillion dollars. Asked once per asset per run.
+    asset_decimals = {}
+    for address in sorted(assets):
+        fallback = 18 if address == quote_native else w["equityDecimals"]
+        try:
+            answer = rpc.call("eth_call", [
+                {"to": address, "data": w.get("decimalsSelector", "0x313ce567")}, "latest"])
+            asset_decimals[address] = int(answer, 16) if answer not in (None, "0x") else fallback
+        except Exception:  # noqa: BLE001 - an unreadable token keeps the configured guess
+            asset_decimals[address] = fallback
+        if asset_decimals[address] != fallback:
+            log("%s reports %d decimals, not the %d assumed for its prefix"
+                % (address, asset_decimals[address], fallback))
+
     revenue = dict((day, 0.0) for day in calendar)
     for entry in fee_logs:
         parts = words(entry["data"], 8)
         day = day_key(ts_of(int(entry["blockNumber"], 16)))
         pairs = ((addr_of(parts[0]), uint_of(parts[4])), (addr_of(parts[1]), uint_of(parts[5])))
         for token_addr, raw in pairs:
-            if token_addr == quote_native:
-                revenue[day] = revenue.get(day, 0.0) + raw / 1e18 * native_price
-            elif token_addr.startswith(equity_prefix):
-                price = prices.get(token_addr, {}).get("price", 0)
-                revenue[day] = revenue.get(day, 0.0) + raw / (10 ** w["equityDecimals"]) * price
+            if token_addr not in asset_decimals:
+                continue
+            price = native_price if token_addr == quote_native else \
+                prices.get(token_addr, {}).get("price", 0)
+            revenue[day] = revenue.get(day, 0.0) + raw / (10.0 ** asset_decimals[token_addr]) * price
 
     burned_raw = rpc.call("eth_call", [
         {"to": token, "data": w["balanceOfSelector"] + pad_addr(dead)[2:]}, "latest"])

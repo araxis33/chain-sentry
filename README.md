@@ -236,6 +236,10 @@ happens if Telegram refuses the photo.
   pools can still under-report total liquidity.
 - The `wallet` profile needs an explorer that serves `action=tokenlist`. Public
   Blockscout rate-limits it, so the call retries with backoff rather than failing fast.
+- Token decimals are read from each token, never inferred from an address prefix. They
+  used to be configured per prefix, and one token sharing the tokenized-stock prefix with
+  18 decimals instead of 8 reported a day's revenue as a trillion dollars. When a token
+  disagrees with the configured default, the run says so in the log.
 - The `lp` profile assumes the second currency of a pair is the dollar quote, which is
   true for the stablecoin-quoted pools it was built against and wrong for a pool of two
   volatile coins. It also assumes shares map one-to-one onto liquidity, which holds for
