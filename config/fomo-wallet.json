@@ -6,6 +6,7 @@
 
   "watch": {
     "address": "0x0000000000000000000000000000000000000000",
+    "chain": "robinhood",
     "minUsd": 1,
     "rpc": ["https://rpc.mainnet.chain.robinhood.com"],
 
@@ -18,6 +19,7 @@
 
   "thresholds": {
     "totalMovePercent": 15,
+    "tokenMovePercent": 20,
     "liquidityBelowUsd": 100000
   },
 

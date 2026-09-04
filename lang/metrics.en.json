@@ -19,6 +19,7 @@
   "burnStalled": "BURN HAS STOPPED: no movement for {hours}h. Burning is done by hand through an owner function, so a stop means the policy changed, not that something broke.",
   "childHit": "THE LAUNCHPAD DELIVERED: child coin {symbol} reached {cap} against a {limit} threshold. First sign the platform ships something other than itself.",
   "walletMoved": "WALLET MOVED {move}%: was {was}, now {now}.",
+  "walletTokenMoved": "COIN MOVED: {symbol} {change} over the day, and you hold {usd} of it.",
   "walletThin": "LIQUIDITY IS THIN: only {liq} sits under {symbol} against a {limit} floor, and you hold {usd} of it. You will not get out of that pool at the price on screen.",
   "recovered": "Stand down: {what} is back to normal.",
   "names": {

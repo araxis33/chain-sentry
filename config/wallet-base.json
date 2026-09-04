@@ -5,6 +5,7 @@
   "stateFile": "state/wallet-base-state.json",
   "watch": {
     "address": "0x0000000000000000000000000000000000000000",
+    "chain": "base",
     "explorer": "https://base.blockscout.com/api",
     "minUsd": 1,
     "rpc": [
@@ -15,6 +16,7 @@
   },
   "thresholds": {
     "totalMovePercent": 20,
+    "tokenMovePercent": 20,
     "liquidityBelowUsd": 25000
   },
   "notify": {
