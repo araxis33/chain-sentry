@@ -20,6 +20,13 @@
   "childHit": "THE LAUNCHPAD DELIVERED: child coin {symbol} reached {cap} against a {limit} threshold. First sign the platform ships something other than itself.",
   "walletMoved": "WALLET MOVED {move}%: was {was}, now {now}.",
   "walletTokenMoved": "COIN MOVED: {symbol} {change} over the day, and you hold {usd} of it.",
+  "cardHeld": "· you hold {usd}",
+  "cardWindows": "1h {h1} · 6h {h6} · 24h {h24}",
+  "cardDepth": "Cap {cap} · Liquidity {liq}{ratio} · Volume {vol}",
+  "cardFlow": "buys {buys} / sells {sells}",
+  "cardAge": "age {age}",
+  "cardPools": "{n} pools",
+  "cardChart": "chart",
   "walletThin": "LIQUIDITY IS THIN: only {liq} sits under {symbol} against a {limit} floor, and you hold {usd} of it. You will not get out of that pool at the price on screen.",
   "recovered": "Stand down: {what} is back to normal.",
   "names": {
