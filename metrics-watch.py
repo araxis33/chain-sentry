@@ -212,17 +212,29 @@ def dexscreener_tokens(addresses, batch_size=5, chain=None):
             if not pairs:
                 continue
             deepest = max(pairs, key=lambda p: (p.get("liquidity") or {}).get("usd") or 0)
+            change = deepest.get("priceChange") or {}
+            txns24 = (deepest.get("txns") or {}).get("h24") or {}
+            volume = deepest.get("volume") or {}
             best[key] = {
                 "symbol": deepest["baseToken"]["symbol"],
                 "price": float(deepest.get("priceUsd") or 0),
                 "liquidity": (deepest.get("liquidity") or {}).get("usd") or 0,
                 "marketCap": deepest.get("marketCap") or deepest.get("fdv") or 0,
-                "volume24": (deepest.get("volume") or {}).get("h24") or 0,
-                "change24": (deepest.get("priceChange") or {}).get("h24"),
+                "volume24": volume.get("h24") or 0,
+                "change24": change.get("h24"),
+                # These windows turn "up 30% on the day" into something to act on:
+                # whether it is still climbing or already rolled over.
+                "change1": change.get("h1"),
+                "change6": change.get("h6"),
+                "buys24": txns24.get("buys") or 0,
+                "sells24": txns24.get("sells") or 0,
+                "pairCreatedAt": deepest.get("pairCreatedAt"),
+                "url": deepest.get("url"),
                 # Kept for the picture digest: the project's own logo.
                 "imageUrl": (deepest.get("info") or {}).get("imageUrl"),
                 "liquidityTotal": sum((p.get("liquidity") or {}).get("usd") or 0
                                       for p in pairs),
+                "poolCount": len(pairs),
             }
     return best
 
@@ -540,6 +552,11 @@ def measure_wallet(cfg, log, known=None, scanned_to=0, discovered=None):
         holding["liquidity"] = info.get("liquidityTotal", info.get("liquidity", 0))
         holding["change24"] = info.get("change24")
         holding["imageUrl"] = info.get("imageUrl")
+        # The rest of the market picture rides along so an alert can show the coin
+        # properly instead of just naming it. Cheap: it came in the same response.
+        for extra in ("marketCap", "volume24", "change1", "change6", "buys24",
+                      "sells24", "pairCreatedAt", "url", "poolCount"):
+            holding[extra] = info.get(extra)
         holding["usd"] = holding["balance"] * holding["price"]
 
     merged = {k["address"].lower() for k in (known or [])}
@@ -654,7 +671,8 @@ def evaluate_wallet(cfg, now, state, text):
         if loud and not flags.get(key):
             alerts.append(mark(text, sign_of(change)) + " " + text["walletTokenMoved"].format(
                 symbol=esc(holding["symbol"]), change=bold(fmt_change(change)),
-                usd=fmt_usd(holding["usd"])))
+                usd=fmt_usd(holding["usd"]))
+                + "\n" + coin_card(holding, text, held_usd=holding['usd']))
         flags[key] = loud
     for key in [k for k in flags if k.startswith("moved:")]:
         if not flags.get(key):
@@ -667,7 +685,8 @@ def evaluate_wallet(cfg, now, state, text):
         if not flags.get(key):
             alerts.append(mark(text, "alarm") + " " + text["walletThin"].format(
                 symbol=esc(holding["symbol"]), liq=fmt_usd(holding["liquidity"]),
-                limit=fmt_usd(th["liquidityBelowUsd"]), usd=fmt_usd(holding["usd"])))
+                limit=fmt_usd(th["liquidityBelowUsd"]), usd=fmt_usd(holding["usd"]))
+                + "\n" + coin_card(holding, text, held_usd=holding['usd']))
         flags[key] = True
     for key in [k for k in flags if k.startswith("thin:")]:
         if key not in ["thin:" + h["address"] for h in thin]:
@@ -683,7 +702,7 @@ def measure_tokens(cfg, log):
     rows = []
     for entry in entries:
         info = prices.get(entry["address"].lower(), {})
-        rows.append({
+        rows.append(dict(info, **{
             "label": entry.get("label") or info.get("symbol") or entry["address"][:10],
             "address": entry["address"].lower(),
             "price": info.get("price", 0),
@@ -692,7 +711,7 @@ def measure_tokens(cfg, log):
             "marketCap": info.get("marketCap", 0),
             "found": bool(info),
             "imageUrl": info.get("imageUrl"),
-        })
+        }))
     missing = [r["label"] for r in rows if not r["found"]]
     if missing:
         log("no market data for: %s" % ", ".join(missing))
@@ -726,14 +745,16 @@ def evaluate_tokens(cfg, now, state, text):
             if not flags.get(key):
                 alerts.append(mark(text, sign_of(change)) + " " + text["tokenMoved"].format(
                     label=esc(row["label"]), change=round(change, 1),
-                    price=bold(fmt_usd(row["price"]))))
+                    price=bold(fmt_usd(row["price"])))
+                    + "\n" + coin_card(row, text))
                 flags[key] = True
         thin_key = "thin:" + row["address"]
         is_thin = 0 < row["liquidity"] < th["liquidityBelowUsd"]
         if is_thin and not flags.get(thin_key):
             alerts.append(mark(text, "alarm") + " " + text["tokenThin"].format(
                 label=esc(row["label"]), liq=fmt_usd(row["liquidity"]),
-                limit=fmt_usd(th["liquidityBelowUsd"])))
+                limit=fmt_usd(th["liquidityBelowUsd"]))
+                + "\n" + coin_card(row, text))
         flags[thin_key] = is_thin
 
     # Day-scoped move flags would pile up forever; keep only today's.
@@ -1037,15 +1058,92 @@ def fmt_change(change):
     return ("%+.1f%%" % change) if isinstance(change, (int, float)) else "-"
 
 
+def fmt_age(created_ms):
+    """How old the pool is. A coin two days old is a different proposition from one
+    that has traded for a year, and the number is never on the chart."""
+    if not created_ms:
+        return None
+    days = (time.time() - float(created_ms) / 1000) / 86400
+    if days < 1:
+        return "%dч" % max(1, round(days * 24))
+    if days < 90:
+        return "%dд" % round(days)
+    return "%dмес" % round(days / 30)
+
+
+def coin_card(info, text, held_usd=None):
+    """The full picture of one coin, for the moment something about it is worth saying.
+
+    A digest line names a coin; this says whether to act on it. Everything here comes
+    from the pair data already fetched for the price, so it costs no extra request:
+
+      price and the three windows -- 1h/6h/24h answers "still going, or rolled over?"
+      cap against liquidity     -- the exit test. A $500M coin over a $9M pool is a
+                                   different animal from the same cap over $200k, and
+                                   the ratio says which without opening a chart.
+      buys against sells        -- who is on the other side of the exit
+      age                       -- how much history the price actually has
+    """
+    lines = []
+    price = info.get("price") or 0
+    head = "%s  %s" % (bold(esc(info.get("symbol") or "?")),
+                       fmt_usd(price) if price else "-")
+    if held_usd:
+        head += "  " + text["cardHeld"].format(usd=fmt_usd(held_usd))
+    lines.append(head)
+
+    windows = text["cardWindows"].format(
+        h1=fmt_change(info.get("change1")), h6=fmt_change(info.get("change6")),
+        h24=fmt_change(info.get("change24")))
+    lines.append(windows)
+
+    liq = info.get("liquidityTotal") or info.get("liquidity") or 0
+    cap = info.get("marketCap") or 0
+    ratio = ("  [×%d]" % round(cap / liq)) if liq and cap else ""
+    lines.append(text["cardDepth"].format(cap=fmt_usd(cap) if cap else "-",
+                                          liq=fmt_usd(liq) if liq else "-", ratio=ratio,
+                                          vol=fmt_usd(info.get("volume24") or 0)))
+
+    buys, sells = info.get("buys24") or 0, info.get("sells24") or 0
+    age = fmt_age(info.get("pairCreatedAt"))
+    tail = []
+    if buys or sells:
+        tail.append(text["cardFlow"].format(buys=format(buys, ","), sells=format(sells, ",")))
+    if age:
+        tail.append(text["cardAge"].format(age=age))
+    if info.get("poolCount"):
+        tail.append(text["cardPools"].format(n=info["poolCount"]))
+    if tail:
+        lines.append(" · ".join(tail))
+    if info.get("url"):
+        lines.append('<a href="%s">%s</a>' % (esc(info["url"]), text["cardChart"]))
+    return "\n".join(lines)
+
+
 def fmt_usd(value):
+    """Money, at the precision that band of money is actually read at.
+
+    Six decimals below a dollar was one rule for two different jobs: a coin at $0.72
+    came out as "$0.723200", which is noise, while a memecoin at 4.7e-7 came out as
+    "$0.000000", which is wrong. Each band now gets the digits it needs.
+    """
     value = float(value or 0)
+    if value >= 1_000_000_000:
+        return "$%.2fB" % (value / 1_000_000_000)
     if value >= 1_000_000:
         return "$%.2fM" % (value / 1_000_000)
     if value >= 1000:
         return "$%s" % format(int(round(value)), ",")
     if value >= 1:
         return "$%.2f" % value
-    return "$%.6f" % value
+    if value >= 0.01:
+        return "$%.4f" % value
+    if value >= 0.000001:
+        return "$%.6f" % value
+    if value > 0:
+        # Sub-microdollar coins are real here; rounding them to zero hides a position.
+        return "$%.2e" % value
+    return "$0.00"
 
 
 def digest(now, text, previous_price=None):
