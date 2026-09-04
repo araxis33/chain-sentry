@@ -33,7 +33,10 @@
     "launchesDying": "launch count",
     "revenueDead": "revenue",
     "burnStalled": "burning",
-    "childHit": "biggest child coin cap"
+    "childHit": "biggest child coin cap",
+    "revenueSliding": "revenue",
+    "revenueBroken": "revenue",
+    "revenueStale": "the revenue feed"
   },
   "digestDay": "On {day}: {launches} launches, {revenue} revenue.",
   "digestBurn": "Burned so far {burned} tokens ({burnedPercent}% of supply).",
@@ -51,5 +54,10 @@
   "lpLineOut": "{label}: {price} is {side} the range {low}-{high} -- earning nothing\n    worth {value}, fees earned {fees}",
   "lpOut": "POSITION LEFT ITS RANGE: {label} at {price}, {side} {low}-{high}. It earns no fees and no points until the price comes back or you move the range.",
   "lpBack": "{label} is back inside its range at {price} ({at}% up from the floor). It is earning again.",
-  "lpEdge": "POSITION IS AT THE EDGE: {label} is {gap}% {side} leaving its range (alert set at {limit}%), price {price}. Fees so far {fees}."
+  "lpEdge": "POSITION IS AT THE EDGE: {label} is {gap}% {side} leaving its range (alert set at {limit}%), price {price}. Fees so far {fees}.",
+  "digestRevenue": "{label}: {value} earned on {day}. The {days}-day average is {average}, {offPeak}% below the peak of {peak} ({peakDay}).{buyback}",
+  "revenueBuyback": " At that rate the buyback is about {buyback} a day.",
+  "revenueSliding": "REVENUE IS SLIDING: {label} — {days}-day average {average}, under the {limit} line and {offPeak}% off the peak. By day: {detail}. The buyback shrinks by exactly the same factor.",
+  "revenueBroken": "REVENUE HAS BROKEN: {label} — {days}-day average {average}, under {limit} and {offPeak}% off the peak. By day: {detail}. A buyback that size no longer holds the price.",
+  "revenueStale": "NO FIGURES: {label}'s last complete day is {day}, {days} days ago. A silent source looks like health and is not."
 }

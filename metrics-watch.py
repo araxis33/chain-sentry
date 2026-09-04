@@ -15,6 +15,7 @@ Profiles, chosen per config with "profile":
     launchpad  events a protocol emits: launches per day, revenue, burn, what it shipped
     tokens     a named watchlist: price, 24h move, cap, liquidity
     wallet     what an address actually holds, airdrop spam filtered out by value
+    revenue    what a protocol earns per day (DefiLlama), judged on a multi-day average
     lp         concentrated liquidity positions: is the price still inside the range,
                how close to an edge, what the position is made of, fees accrued
 
@@ -763,6 +764,119 @@ def evaluate_tokens(cfg, now, state, text):
     return alerts, flags
 
 
+def measure_revenue(cfg, log):
+    """Profile 'revenue': what a protocol earns per day, read from DefiLlama.
+
+    Reading this off the chain would mean tracking every fee contract a launchpad
+    deploys, and it deploys one per coin. DefiLlama already normalises that, so this
+    profile takes the number and does the judging here.
+
+    Only COMPLETE days count. The running day is a fraction of itself, and comparing
+    it against a threshold would report a collapse every morning and a recovery every
+    night. The average smooths the rest: a single quiet day is noise, three in a row
+    is a trend.
+    """
+    w = cfg["watch"]
+    span = int(w.get("averageDays", 3))
+    url = "https://api.llama.fi/summary/fees/%s?dataType=%s" % (
+        urllib.parse.quote(w["protocol"]), w.get("dataType", "dailyRevenue"))
+    chart = http_json(url).get("totalDataChart") or []
+    days = {}
+    for point in chart:
+        if isinstance(point, (list, tuple)) and len(point) >= 2:
+            days[day_key(point[0])] = float(point[1] or 0)
+
+    today = day_key(time.time())
+    complete = sorted(d for d in days if d < today)
+    if not complete:
+        raise RuntimeError("DefiLlama returned no completed day for " + w["protocol"])
+
+    window = complete[-span:]
+    average = sum(days[d] for d in window) / len(window)
+    peak_day = max(complete, key=lambda d: days[d])
+    latest = complete[-1]
+    stale_days = (dt.datetime.strptime(today, "%Y-%m-%d")
+                  - dt.datetime.strptime(latest, "%Y-%m-%d")).days
+
+    log("revenue: %s last complete day %s = $%s, %d-day average $%s, peak $%s on %s" % (
+        w["protocol"], latest, format(round(days[latest]), ","), len(window),
+        format(round(average), ","), format(round(days[peak_day]), ","), peak_day))
+
+    return {
+        "measuredAt": int(time.time()),
+        "label": w.get("label") or w["protocol"],
+        "latestDay": latest,
+        "latestValue": days[latest],
+        "average": average,
+        "windowDays": len(window),
+        "window": [(d, days[d]) for d in window],
+        "peak": days[peak_day],
+        "peakDay": peak_day,
+        "staleDays": stale_days,
+        "buybackShare": w.get("buybackShare"),
+    }
+
+
+def digest_revenue(now, text):
+    share = now.get("buybackShare")
+    buyback = (text["revenueBuyback"].format(buyback=fmt_usd(now["average"] * share))
+               if share else "")
+    off_peak = 0 if not now["peak"] else (1 - now["average"] / now["peak"]) * 100
+    # "info", not "digest": the card's palette has no colour for the latter, and a
+    # grey line reads as a dead one.
+    return [row("info", text["digestRevenue"].format(
+        label=esc(now["label"]), day=now["latestDay"], value=bold(fmt_usd(now["latestValue"])),
+        days=now["windowDays"], average=bold(fmt_usd(now["average"])),
+        peak=fmt_usd(now["peak"]), peakDay=now["peakDay"], offPeak=round(off_peak),
+        buyback=buyback))]
+
+
+def evaluate_revenue(cfg, now, state, text):
+    """Alerts on the AVERAGE crossing a line, never on one day's number."""
+    th = cfg["thresholds"]
+    flags = dict(state.get("flags", {}))
+    alerts = []
+
+    def flip(name, active, message, kind="alarm"):
+        was = flags.get(name, False)
+        flags[name] = active
+        if active and not was:
+            alerts.append(mark(text, kind) + " " + message)
+        elif was and not active and cfg.get("alertOnRecovery", True):
+            alerts.append(mark(text, "up") + " "
+                          + text["recovered"].format(what=text["names"][name]))
+
+    average, alarm_at = now["average"], th["alarmBelowUsd"]
+    warn_at = th["warnBelowUsd"]
+    off_peak = 0 if not now["peak"] else (1 - average / now["peak"]) * 100
+    detail = ", ".join("%s $%s" % (d, format(round(v), ",")) for d, v in now["window"])
+
+    # Three states, not two flags. Two independent booleans would announce "back to
+    # normal" on the way up from broken to merely sliding, which is not normal.
+    level = "broken" if average < alarm_at else ("sliding" if average < warn_at else "ok")
+    was = flags.get("revenueLevel", "ok")
+    flags["revenueLevel"] = level
+    if level != was:
+        if level == "broken":
+            alerts.append(mark(text, "alarm") + " " + text["revenueBroken"].format(
+                label=esc(now["label"]), days=now["windowDays"],
+                average=bold(fmt_usd(average)), limit=fmt_usd(alarm_at),
+                offPeak=round(off_peak), detail=detail))
+        elif level == "sliding":
+            alerts.append(mark(text, "warn") + " " + text["revenueSliding"].format(
+                label=esc(now["label"]), days=now["windowDays"],
+                average=bold(fmt_usd(average)), limit=fmt_usd(warn_at),
+                offPeak=round(off_peak), detail=detail))
+        elif cfg.get("alertOnRecovery", True):
+            alerts.append(mark(text, "up") + " "
+                          + text["recovered"].format(what=text["names"]["revenueBroken"]))
+    # A source that stops publishing looks exactly like a protocol that keeps earning.
+    flip("revenueStale", now["staleDays"] > int(th.get("staleAfterDays", 2)),
+         text["revenueStale"].format(label=esc(now["label"]), day=now["latestDay"],
+                                     days=now["staleDays"]), kind="warn")
+    return alerts, flags
+
+
 def top_child(state, fresh_children, limit):
     """Largest market cap among coins the launchpad has produced."""
     known = sorted(set(state.get("childTokens", [])) | set(fresh_children))
@@ -1354,6 +1468,13 @@ def process_one(cfg_path, log):
         lines = digest_tokens(now, text)
         alerts, flags = ([], {}) if first_run else evaluate_tokens(cfg, now, state, text)
         state_out = {"baseline": True, "measuredAt": now["measuredAt"], "flags": flags}
+    elif profile == "revenue":
+        now = measure_revenue(cfg, log)
+        lines = digest_revenue(now, text)
+        alerts, flags = ([], {}) if first_run else evaluate_revenue(cfg, now, state, text)
+        state_out = {"baseline": True, "measuredAt": now["measuredAt"],
+                     "lastAverage": now["average"], "lastDay": now["latestDay"],
+                     "flags": flags}
     elif profile == "lp":
         now = measure_lp(cfg, Rpc(cfg["rpc"]), log)
         lines = digest_lp(now, text)

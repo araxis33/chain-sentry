@@ -1,0 +1,25 @@
+{
+  "name": "Pons — выручка лаунчпада",
+  "profile": "revenue",
+  "language": "ru",
+  "stateFile": "state/pons-revenue-state.json",
+
+  "watch": {
+    "protocol": "pons-v2",
+    "dataType": "dailyRevenue",
+    "label": "Pons",
+    "averageDays": 3,
+    "buybackShare": 0.8
+  },
+
+  "thresholds": {
+    "warnBelowUsd": 700000,
+    "alarmBelowUsd": 400000,
+    "staleAfterDays": 2
+  },
+
+  "notify": {
+    "tokenEnv": "TELEGRAM_BOT_TOKEN",
+    "chatEnv": "TELEGRAM_CHAT_ID"
+  }
+}
