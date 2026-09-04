@@ -181,12 +181,18 @@ def sint_of(word):
 
 # --------------------------------------------------------------- prices
 
-def dexscreener_tokens(addresses, batch_size=5):
+def dexscreener_tokens(addresses, batch_size=5, chain=None):
     """Best pair per token address, keyed by lowercase address.
 
     The endpoint caps how many PAIRS it returns per call, not how many tokens, so a
     token with many pools crowds its neighbours out of the answer entirely. Small
     batches cost more requests and are the only way to get every token priced.
+
+    `chain` matters more than it looks. An address is only unique within one chain,
+    and the same twenty hex bytes elsewhere can be a completely different token: on
+    2026-09-04 CASHCAT on Robinhood Chain was priced at 7.0e26 dollars a coin, because
+    a namesake address on another chain carried a two-billion-dollar pool and won the
+    "deepest liquidity" contest. Naming the chain removes the whole class of error.
     """
     best = {}
     addresses = [a for a in addresses if a]
@@ -196,26 +202,52 @@ def dexscreener_tokens(addresses, batch_size=5):
             data = http_json("https://api.dexscreener.com/latest/dex/tokens/" + batch, retries=2)
         except Exception:  # noqa: BLE001 - price data is best effort
             continue
-        totals = {}
+        by_token = {}
         for pair in (data.get("pairs") or []):
-            key = pair["baseToken"]["address"].lower()
-            liq = (pair.get("liquidity") or {}).get("usd") or 0
-            totals[key] = totals.get(key, 0) + liq
-            if key not in best or liq > best[key]["liquidity"]:
-                best[key] = {
-                    "symbol": pair["baseToken"]["symbol"],
-                    "price": float(pair.get("priceUsd") or 0),
-                    "liquidity": liq,
-                    "marketCap": pair.get("marketCap") or pair.get("fdv") or 0,
-                    "volume24": (pair.get("volume") or {}).get("h24") or 0,
-                    "change24": (pair.get("priceChange") or {}).get("h24"),
-                    # Kept for the picture digest: the project's own logo.
-                    "imageUrl": (pair.get("info") or {}).get("imageUrl"),
-                }
-        for key, total in totals.items():
-            if key in best:
-                best[key]["liquidityTotal"] = total
+            if chain and str(pair.get("chainId", "")).lower() != chain.lower():
+                continue
+            by_token.setdefault(pair["baseToken"]["address"].lower(), []).append(pair)
+        for key, pairs in by_token.items():
+            pairs = reject_outlier_pairs(pairs)
+            if not pairs:
+                continue
+            deepest = max(pairs, key=lambda p: (p.get("liquidity") or {}).get("usd") or 0)
+            best[key] = {
+                "symbol": deepest["baseToken"]["symbol"],
+                "price": float(deepest.get("priceUsd") or 0),
+                "liquidity": (deepest.get("liquidity") or {}).get("usd") or 0,
+                "marketCap": deepest.get("marketCap") or deepest.get("fdv") or 0,
+                "volume24": (deepest.get("volume") or {}).get("h24") or 0,
+                "change24": (deepest.get("priceChange") or {}).get("h24"),
+                # Kept for the picture digest: the project's own logo.
+                "imageUrl": (deepest.get("info") or {}).get("imageUrl"),
+                "liquidityTotal": sum((p.get("liquidity") or {}).get("usd") or 0
+                                      for p in pairs),
+            }
     return best
+
+
+def reject_outlier_pairs(pairs, factor=5.0):
+    """Drop pools quoting a price the rest of the market disagrees with.
+
+    Deepest liquidity is the usual way to pick the honest pool, and it fails on a
+    junk pool that also reports junk depth. CASHCAT on Robinhood Chain had five
+    Uniswap pools around $0.255 and one "robinvista" pool quoting 7.0e26 dollars
+    against a claimed two billion of liquidity -- and the deepest-pool rule handed
+    the wallet a total of $1.6e29. The median of the pools is the sober opinion;
+    anything more than a factor away from it is not a price, it is a broken feed.
+
+    With one or two pools there is nothing to compare against, so nothing is dropped.
+    """
+    priced = [(float(p.get("priceUsd") or 0), p) for p in pairs]
+    priced = [(px, p) for px, p in priced if px > 0]
+    if len(priced) < 3:
+        return [p for _, p in priced] or list(pairs)
+    ordered = sorted(px for px, _ in priced)
+    median = ordered[len(ordered) // 2]
+    if median <= 0:
+        return [p for _, p in priced]
+    return [p for px, p in priced if median / factor <= px <= median * factor]
 
 
 # --------------------------------------------------------------- measuring
@@ -335,7 +367,52 @@ def measure(cfg, rpc, log, days_back):
     }
 
 
-def measure_wallet(cfg, log, known=None):
+TOPIC_TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+
+
+def discover_by_logs(rpc, address, from_block, log):
+    """Find tokens on a chain with no explorer to ask -- by reading the chain itself.
+
+    Robinhood Chain's Blockscout answers a script with 403, so the FOMO wallet was
+    watched through a hand-written list of three tokens: anything bought after the
+    list was written did not exist as far as the watcher was concerned. It does now.
+    Every ERC-20 credits the recipient in an indexed topic, so one filtered
+    eth_getLogs names every token this address was ever sent.
+
+    Returns (tokens, scanned_to). The cursor means later runs read only new blocks.
+    """
+    latest = int(rpc.call("eth_blockNumber", []), 16)
+    if from_block > latest:
+        return [], latest
+    padded = "0x" + "0" * 24 + address.lower().replace("0x", "")
+    query = {"topics": [TOPIC_TRANSFER, None, padded], "fromBlock": hex(from_block)}
+    try:
+        # This node answers an open-ended range in one call when the topic filter is
+        # narrow, which it is -- one recipient. Cheaper than a thousand windows.
+        entries = rpc.call("eth_getLogs", [dict(query, toBlock=hex(latest))])
+    except RuntimeError as exc:
+        log("discovery: one-shot scan refused (%s), walking in windows" % str(exc)[:80])
+        entries, start, step = [], from_block, 100000
+        while start <= latest:
+            end = min(start + step - 1, latest)
+            try:
+                entries += rpc.call("eth_getLogs", [dict(query, fromBlock=hex(start),
+                                                         toBlock=hex(end))])
+            except RuntimeError:
+                if step <= 5000:
+                    raise
+                step = max(5000, step // 2)
+                continue
+            start = end + 1
+    found = []
+    for entry in entries:
+        token = str(entry.get("address", "")).lower()
+        if token and token not in found:
+            found.append(token)
+    return found, latest
+
+
+def measure_wallet(cfg, log, known=None, scanned_to=0, discovered=None):
     """Profile 'wallet': what an address actually holds, spam filtered out by value.
 
     A Base wallet accumulates hundreds of airdropped tokens nobody asked for. Counting
@@ -356,6 +433,40 @@ def measure_wallet(cfg, log, known=None):
         seen_known = {k["address"].lower() for k in (known or [])}
         known = list(known or []) + [t for t in configured
                                      if t["address"].lower() not in seen_known]
+
+    # No explorer does not have to mean no discovery. Read the transfer log instead,
+    # so a coin bought today shows up tonight without anyone editing the config.
+    # `discovered` is kept apart from `knownTokens` on purpose: knownTokens is rebuilt
+    # each run from what is worth more than minUsd, so a coin that dips under a dollar
+    # would fall out of it and -- the cursor having moved past its transfer -- never be
+    # found again. This list forgets nothing.
+    discovered = list(discovered or [])
+    rebased = False
+    if not w.get("explorer") and w.get("rpc") and w.get("discover", True):
+        try:
+            rpc = Rpc(w["rpc"])
+            fresh, scanned_to = discover_by_logs(rpc, address, scanned_to, log)
+            seen_any = {k["address"].lower() for k in (known or [])} | {
+                d["address"].lower() for d in discovered}
+            cache, added = {}, []
+            for token in fresh:
+                if token in seen_any:
+                    continue
+                symbol, decimals = token_meta(rpc, token, cache)
+                discovered.append({"symbol": symbol, "address": token, "decimals": decimals})
+                seen_any.add(token)
+                added.append(symbol)
+            if added:
+                log("discovery: %d new token(s) off the chain -- %s"
+                    % (len(added), ", ".join(added)))
+                # The total is about to jump because the watcher learned to see more,
+                # not because the wallet grew. Announcing that as a move would be a lie.
+                rebased = True
+            seen_known = {k["address"].lower() for k in (known or [])}
+            known = list(known or []) + [d for d in discovered
+                                         if d["address"].lower() not in seen_known]
+        except Exception as exc:  # noqa: BLE001 - discovery is a bonus, never a blocker
+            log("discovery: log scan failed (%s), using the known list" % str(exc)[:100])
 
     entries, complaint, from_cache = None, "", False
     if w.get("explorer"):
@@ -385,7 +496,8 @@ def measure_wallet(cfg, log, known=None):
                 "explorer unavailable (%s); reusing %d known tokens" % (complaint, len(known)))
             from_cache = True
             entries = [{"type": "ERC-20", "symbol": k["symbol"], "decimals": str(k.get("decimals", 18)),
-                        "contractAddress": k["address"], "balance": "1"} for k in known]
+                        "contractAddress": k["address"], "balance": "1",
+                        "placeholder": True} for k in known]
         else:
             raise RuntimeError("explorer returned no token list (%s)" % complaint)
 
@@ -418,9 +530,10 @@ def measure_wallet(cfg, log, known=None):
             "address": item["contractAddress"].lower(),
             "decimals": decimals,
             "balance": raw / (10 ** decimals),
+            "placeholder": bool(item.get("placeholder")),
         })
 
-    prices = dexscreener_tokens([h["address"] for h in held])
+    prices = dexscreener_tokens([h["address"] for h in held], chain=w.get("chain"))
     for holding in held:
         info = prices.get(holding["address"], {})
         holding["price"] = info.get("price", 0)
@@ -443,7 +556,7 @@ def measure_wallet(cfg, log, known=None):
     # already been withdrawn in full. Discovery can come from the explorer, but the
     # NUMBER has to come from the chain. Only the ones that passed the value filter are
     # re-read, so this stays a handful of calls rather than one per airdrop.
-    real, ghosts, empty = [], [], 0
+    real, ghosts, empty, unread = [], [], 0, []
     rpc = Rpc(w["rpc"])
     for holding in candidates:
         try:
@@ -454,6 +567,13 @@ def measure_wallet(cfg, log, known=None):
             decimals = holding.get("decimals", 18)
             onchain = int(raw, 16) / (10 ** decimals)
         except Exception:  # noqa: BLE001 - keep the explorer's number if the node is down
+            if holding.get("placeholder"):
+                # There is no explorer number to fall back on here: the balance is a
+                # stand-in of 1 wei, and reporting it would put the coin in the digest
+                # at zero dollars, which reads as "sold" rather than "not answered".
+                # A dropped node must not be able to make money look like it vanished.
+                unread.append(holding["symbol"])
+                continue
             real.append(holding)
             continue
         if onchain <= 0:
@@ -470,6 +590,9 @@ def measure_wallet(cfg, log, known=None):
             real.append(holding)
     if ghosts:
         log("explorer listed balances the chain does not have: %s" % ", ".join(ghosts))
+    if unread:
+        log("node would not answer for %d token(s), left out of the total: %s"
+            % (len(unread), ", ".join(unread)))
 
     real.sort(key=lambda h: -h["usd"])
     return {
@@ -477,6 +600,10 @@ def measure_wallet(cfg, log, known=None):
         "fromCache": from_cache,
         "knownTokens": [{"symbol": h["symbol"], "address": h["address"],
                          "decimals": h.get("decimals", 18)} for h in real],
+        "discoveredTokens": discovered,
+        "scannedToBlock": scanned_to,
+        "partial": bool(unread),
+        "rebased": rebased,
         "holdings": real,
         "totalUsd": sum(h["usd"] for h in real),
         "tokenCount": len(held),
@@ -503,11 +630,35 @@ def evaluate_wallet(cfg, now, state, text):
     alerts = []
     previous = state.get("totalUsd")
 
-    if previous and previous > 0:
+    # An incomplete measurement cannot be compared against a complete one.
+    if previous and previous > 0 and not now.get("partial") and not now.get("rebased"):
         move = (now["totalUsd"] - previous) / previous * 100
         if abs(move) >= th["totalMovePercent"]:
             alerts.append(mark(text, sign_of(move)) + " " + text["walletMoved"].format(
                 move=round(move, 1), was=fmt_usd(previous), now=bold(fmt_usd(now["totalUsd"]))))
+
+    # A total hides the thing worth knowing. On 2026-09-04 this wallet held PONS up 32%
+    # and Index down over the same day; the two cancelled to -1.8% and the watcher said
+    # nothing at all. So every holding is now judged on its own move as well.
+    token_limit = th.get("tokenMovePercent")
+    for holding in now["holdings"] if token_limit else []:
+        change = holding.get("change24")
+        if change is None:
+            continue
+        loud = abs(change) >= token_limit
+        key = "moved:%s:%s" % (holding["address"], "up" if change > 0 else "down")
+        opposite = "moved:%s:%s" % (holding["address"], "down" if change > 0 else "up")
+        # A coin that keeps sitting above the line must not be re-announced every run;
+        # it is re-armed once it comes back under, or turns the other way.
+        flags.pop(opposite, None)
+        if loud and not flags.get(key):
+            alerts.append(mark(text, sign_of(change)) + " " + text["walletTokenMoved"].format(
+                symbol=esc(holding["symbol"]), change=bold(fmt_change(change)),
+                usd=fmt_usd(holding["usd"])))
+        flags[key] = loud
+    for key in [k for k in flags if k.startswith("moved:")]:
+        if not flags.get(key):
+            flags.pop(key, None)
 
     # Liquidity draining under a holding is the early warning a price chart gives too late.
     thin = [h for h in now["holdings"] if 0 < h["liquidity"] < th["liquidityBelowUsd"]]
@@ -973,7 +1124,81 @@ def telegram_photo(token, chat_id, path, caption, log):
     return False
 
 
-def telegram(token, chat_id, message, log):
+OUTBOX_PATH = os.path.join("state", "outbox.jsonl")
+OUTBOX_MAX = 200
+OUTBOX_MAX_AGE = 3 * 24 * 3600
+
+
+def outbox_add(message, log):
+    """Hold a message the network refused to carry.
+
+    The watcher runs on a laptop, and a laptop loses DNS -- 404 failed lookups in
+    one day is what the logs actually show. A send that raises used to end there:
+    the alert was composed, written to the log, and thrown away. Now it waits on
+    disk instead, and the next run that reaches Telegram carries it.
+    """
+    entry = {"at": int(time.time()), "text": message}
+    try:
+        os.makedirs(os.path.dirname(OUTBOX_PATH), exist_ok=True)
+        pending = outbox_read()
+        pending.append(entry)
+        outbox_write(pending[-OUTBOX_MAX:])
+        log("telegram: held in the outbox, %d waiting" % len(pending[-OUTBOX_MAX:]))
+    except Exception as exc:  # noqa: BLE001 - the outbox must never break a run
+        log("telegram: outbox unwritable (%s), message lost" % exc)
+
+
+def outbox_read():
+    if not os.path.exists(OUTBOX_PATH):
+        return []
+    cutoff = time.time() - OUTBOX_MAX_AGE
+    kept = []
+    with open(OUTBOX_PATH, encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except ValueError:
+                continue
+            # A three-day-old alert is history, not news. Dropping it keeps the
+            # queue from growing without bound during a long outage.
+            if entry.get("at", 0) >= cutoff:
+                kept.append(entry)
+    return kept
+
+
+def outbox_write(entries):
+    with open(OUTBOX_PATH, "w", encoding="utf-8") as handle:
+        for entry in entries:
+            handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+def outbox_flush(token, chat_id, log):
+    """Deliver what earlier runs could not, oldest first, before anything new."""
+    pending = outbox_read()
+    if not pending:
+        return
+    log("telegram: %d message(s) waiting from earlier runs" % len(pending))
+    left = []
+    for index, entry in enumerate(pending):
+        if left:  # the line is down again; stop hammering it
+            left.append(entry)
+            continue
+        stamp = time.strftime("%d.%m %H:%M", time.localtime(entry.get("at", 0)))
+        held = "\n\n<i>(отложено %s, доставлено сейчас)</i>" % stamp
+        if not telegram(token, chat_id, entry["text"] + held, log, queue=False):
+            left.append(entry)
+    outbox_write(left)
+    delivered = len(pending) - len(left)
+    if delivered:
+        log("telegram: delivered %d held message(s)" % delivered)
+    if left:
+        log("telegram: %d still waiting" % len(left))
+
+
+def telegram(token, chat_id, message, log, queue=True):
     url = "https://api.telegram.org/bot%s/sendMessage" % token
     payload = {"chat_id": chat_id, "text": message, "disable_web_page_preview": True,
                "parse_mode": "HTML"}
@@ -993,7 +1218,11 @@ def telegram(token, chat_id, message, log):
             return True
         log("telegram: rejected again -- %s" % out.get("description"))
     except Exception as exc:  # noqa: BLE001
+        # A refusal and an outage are different failures. Telegram saying no to the
+        # markup is final; DNS saying nothing is temporary, so only this branch queues.
         log("telegram: failed -- %s" % exc)
+        if queue:
+            outbox_add(message, log)
     return False
 
 
@@ -1033,7 +1262,9 @@ def process_one(cfg_path, log):
         alerts, flags = ([], {}) if first_run else evaluate_lp(cfg, now, state, text)
         state_out = {"baseline": True, "measuredAt": now["measuredAt"], "flags": flags}
     elif profile == "wallet":
-        now = measure_wallet(cfg, log, state.get("knownTokens"))
+        now = measure_wallet(cfg, log, state.get("knownTokens"),
+                             scanned_to=state.get("scannedToBlock", 0),
+                             discovered=state.get("discoveredTokens"))
         log("holdings: %d worth %s, %d spam tokens ignored" % (
             len(now["holdings"]), fmt_usd(now["totalUsd"]), now["spamCount"]))
         lines = digest_wallet(now, text, state.get("totalUsd"))
@@ -1041,8 +1272,14 @@ def process_one(cfg_path, log):
         state_out = {
             "baseline": True,
             "measuredAt": now["measuredAt"],
-            "totalUsd": now["totalUsd"],
+            # A run that could not read every balance holds a total that is too low by
+            # whatever it missed. Saving it would make the next full run look like a
+            # jump, so the last complete figure stays the baseline.
+            "totalUsd": (state.get("totalUsd") if now.get("partial") and state.get("totalUsd")
+                         else now["totalUsd"]),
             "knownTokens": now["knownTokens"] or state.get("knownTokens") or [],
+            "discoveredTokens": now.get("discoveredTokens") or state.get("discoveredTokens") or [],
+            "scannedToBlock": now.get("scannedToBlock") or state.get("scannedToBlock", 0),
             "flags": flags,
         }
     else:
@@ -1121,7 +1358,14 @@ def main():
         stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
         line = "%s  %s" % (stamp, message)
         lines.append(line)
-        print(line)
+        try:
+            print(line)
+        except UnicodeEncodeError:
+            # A Russian Windows console is cp1251 and cannot render an emoji. The log
+            # file is UTF-8 and keeps the real text; only the echo is degraded, and a
+            # dry run must not die because the terminal is narrow-minded.
+            encoding = getattr(sys.stdout, "encoding", None) or "ascii"
+            print(line.encode(encoding, "replace").decode(encoding, "replace"))
 
     load_env_file(args.env_file)
     log("=== run over %d config(s) ===" % len(args.config))
@@ -1162,6 +1406,14 @@ def main():
     message = "\n\n".join(alert_blocks + digest_blocks + notes)
     if not message:
         log(text["nothingChanged"])
+
+    # Anything an earlier run could not deliver goes first, and goes even on a run
+    # that has nothing new to say -- otherwise a held alert waits for the next change.
+    if not args.dry_run and results:
+        held_token = os.environ.get(results[0]["notify"]["tokenEnv"], "")
+        held_chat = os.environ.get(results[0]["notify"]["chatEnv"], "")
+        if held_token and held_chat:
+            outbox_flush(held_token, held_chat, log)
 
     if message:
         if args.dry_run:
