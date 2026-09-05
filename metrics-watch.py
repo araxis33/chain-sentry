@@ -115,8 +115,14 @@ class Rpc:
                 errors.append("%s: %s" % (url, exc))
         raise RuntimeError("all nodes failed for %s -- %s" % (method, "; ".join(errors)))
 
-    def logs(self, address, topic, from_block, to_block, step=40000):
-        """eth_getLogs over a range, split into chunks a public node will accept."""
+    def logs(self, address, topic, from_block, to_block, step=40000, topics=None):
+        """eth_getLogs over a range, split into chunks a public node will accept.
+
+        `topics` passes the whole filter through when the caller needs more than
+        topic0 -- transfers *from* one address, say. A node that refuses the range
+        gets a smaller one, down to 1000 blocks: public nodes cap the answer by size,
+        so a busy contract like WETH needs a much shorter reach than a quiet one.
+        """
         out = []
         start = from_block
         while start <= to_block:
@@ -124,14 +130,14 @@ class Rpc:
             try:
                 chunk = self.call("eth_getLogs", [{
                     "address": address,
-                    "topics": [topic],
+                    "topics": topics or [topic],
                     "fromBlock": hex(start),
                     "toBlock": hex(end),
                 }])
             except RuntimeError:
-                if step <= 5000:
+                if step <= 1000:
                     raise
-                step = max(5000, step // 2)
+                step = max(1000, step // 4)
                 continue
             out.extend(chunk)
             start = end + 1
@@ -355,6 +361,17 @@ def measure(cfg, rpc, log, days_back):
                 prices.get(token_addr, {}).get("price", 0)
             revenue[day] = revenue.get(day, 0.0) + raw / (10.0 ** asset_decimals[token_addr]) * price
 
+    # The fuel behind the buyback, and the number the revenue metric above cannot see.
+    # Platform revenue counts what the launchpad takes off other people's coins; the
+    # locker also hands over the fees of the token's OWN pool, and over 31.08-05.09
+    # that was 3.35 of the 4.78 ETH that went into buying and burning. Measured where
+    # it actually leaves: native quote asset out of the locker.
+    fuel = dict((day, 0.0) for day in calendar)
+    for entry in rpc.logs(quote_native, TOPIC_TRANSFER, from_block, latest,
+                          topics=[TOPIC_TRANSFER, pad_addr(locker)]):
+        day = day_key(ts_of(int(entry["blockNumber"], 16)))
+        fuel[day] = fuel.get(day, 0.0) + uint_of(entry["data"][2:66]) / 1e18
+
     burned_raw = rpc.call("eth_call", [
         {"to": token, "data": w["balanceOfSelector"] + pad_addr(dead)[2:]}, "latest"])
     burned = int(burned_raw, 16) / 1e18
@@ -370,6 +387,7 @@ def measure(cfg, rpc, log, days_back):
         "block": latest,
         "launchesByDay": launches,
         "revenueByDay": {k: round(v, 2) for k, v in revenue.items()},
+        "fuelByDay": {k: round(v, 4) for k, v in fuel.items()},
         "burned": burned,
         "burnedPercent": (burned / supply * 100) if supply else 0,
         "childTokens": sorted(child_tokens),
@@ -1104,6 +1122,22 @@ def evaluate_lp(cfg, now, state, text):
 
 # --------------------------------------------------------------- alerting
 
+def fuel_window(now, state, window):
+    """Buyback fuel over the last `window` completed days, and the merged history.
+
+    Judged over a window, not a day: the locker is emptied in bursts, so one quiet
+    day says nothing while a quiet week says the buyback has nothing left to spend.
+    Sets the two figures on `now` so the digest can print them on a first run too,
+    before any threshold exists to compare them against.
+    """
+    history = dict(state.get("fuelByDay", {}))
+    history.update(now.get("fuelByDay", {}))
+    days = [d for d in sorted(history) if d != day_key(now["measuredAt"])][-window:]
+    now["fuelWindow"] = round(sum(history.get(d, 0.0) for d in days), 3)
+    now["fuelWindowDays"] = len(days)
+    return history, days
+
+
 def evaluate(cfg, now, state, text):
     """Return (alerts, new_flags). An alert fires only when a flag flips on."""
     th = cfg["thresholds"]
@@ -1160,7 +1194,14 @@ def evaluate(cfg, now, state, text):
         cap=fmt_usd(cap), symbol=now.get("topChildSymbol") or "?",
         limit=fmt_usd(th["topChildMcapAbove"])))
 
-    return alerts, flags, history, rev_history
+    window = int(th.get("fuelWindowDays", 5))
+    fuel_history, fuel_days = fuel_window(now, state, window)
+    if "fuelEthBelow" in th and len(fuel_days) >= window:
+        flip("fuelDry", now["fuelWindow"] < th["fuelEthBelow"], text["fuelDry"].format(
+            days=window, value=round(now["fuelWindow"], 2), limit=th["fuelEthBelow"],
+            detail=", ".join("%s: %.2f" % (d, fuel_history.get(d, 0.0)) for d in fuel_days)))
+
+    return alerts, flags, history, rev_history, fuel_history
 
 
 # --------------------------------------------------------------- presentation
@@ -1319,6 +1360,8 @@ def digest(now, text, previous_price=None):
         row("info", text["digestChild"].format(
             childSymbol=esc(now.get("topChildSymbol") or "-"),
             child=fmt_usd(now.get("topChildMcap", 0)))),
+        row("info", text["digestFuel"].format(
+            eth=("%.2f" % now.get("fuelWindow", 0)), days=now.get("fuelWindowDays", 0))),
         row(sign_of(price_change), text["digestMarket"].format(
             price=bold(fmt_usd(now["price"])), cap=fmt_usd(now["marketCap"]),
             liquidity=fmt_usd(now["liquidity"])), logo=now.get("imageUrl")),
@@ -1555,13 +1598,18 @@ def process_one(cfg_path, log):
         log("market:   price %s, cap %s, liquidity %s" % (
             fmt_usd(now["price"]), fmt_usd(now["marketCap"]), fmt_usd(now["liquidity"])))
 
+        fuel_days = int(cfg["thresholds"].get("fuelWindowDays", 5))
+        fuel_history, _ = fuel_window(now, state, fuel_days)
+        log("fuel:     %.3f ETH out of the locker over %d completed day(s)" % (
+            now["fuelWindow"], now["fuelWindowDays"]))
+
         lines = digest(now, text, state.get("lastPrice"))
         if first_run:
             alerts, flags = [], {}
             history = dict(now["launchesByDay"])
             rev_history = dict(now["revenueByDay"])
         else:
-            alerts, flags, history, rev_history = evaluate(cfg, now, state, text)
+            alerts, flags, history, rev_history, fuel_history = evaluate(cfg, now, state, text)
         state_out = {
             "baseline": True,
             "measuredAt": now["measuredAt"],
@@ -1571,6 +1619,7 @@ def process_one(cfg_path, log):
             "flags": flags,
             "launchesByDay": trim_days(history, cfg["keepDays"]),
             "revenueByDay": trim_days(rev_history, cfg["keepDays"]),
+            "fuelByDay": trim_days(fuel_history, cfg["keepDays"]),
             "childTokens": known_children[:cfg["watch"]["childScanLimit"]],
             "lastPrice": now["price"],
             "lastTopChildMcap": cap,

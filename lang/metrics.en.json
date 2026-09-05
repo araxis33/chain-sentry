@@ -18,6 +18,7 @@
   "revenueDead": "REVENUE BELOW THRESHOLD: on {day} the platform earned ${value} against a ${limit} floor. A buyback on that money stops mattering.",
   "burnStalled": "BURN HAS STOPPED: no movement for {hours}h. Burning is done by hand through an owner function, so a stop means the policy changed, not that something broke.",
   "childHit": "THE LAUNCHPAD DELIVERED: child coin {symbol} reached {cap} against a {limit} threshold. First sign the platform ships something other than itself.",
+  "fuelDry": "BUYBACK IS RUNNING DRY: {value} ETH left the locker over {days} days, against a {limit} floor. By day: {detail}. The buyback runs on fees -- fewer fees, less burning, whatever the launch count says.",
   "walletMoved": "WALLET MOVED {move}%: was {was}, now {now}.",
   "walletTokenMoved": "COIN MOVED: {symbol} {change} over the day, and you hold {usd} of it.",
   "cardHeld": "· you hold {usd}",
@@ -34,6 +35,7 @@
     "revenueDead": "revenue",
     "burnStalled": "burning",
     "childHit": "biggest child coin cap",
+    "fuelDry": "buyback fuel",
     "revenueSliding": "revenue",
     "revenueBroken": "revenue",
     "revenueStale": "the revenue feed"
@@ -41,6 +43,7 @@
   "digestDay": "On {day}: {launches} launches, {revenue} revenue.",
   "digestBurn": "Burned so far {burned} tokens ({burnedPercent}% of supply).",
   "digestChild": "Biggest child coin: {childSymbol} at {child}.",
+  "digestFuel": "Buyback fuel: {eth} ETH out of the locker over {days} days.",
   "digestMarket": "Price {price}, cap {cap}, liquidity {liquidity}.",
   "walletTotal": "{total} across {kept} coins (spam ignored: {spam}).",
   "walletLine": "{symbol}: {usd}  24h {change}",

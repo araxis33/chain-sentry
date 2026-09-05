@@ -38,7 +38,9 @@
     "revenueUsdPerDayBelow": 300,
     "burnStalledHours": 24,
     "burnMinTokens": 1000,
-    "topChildMcapAbove": 1000000
+    "topChildMcapAbove": 1000000,
+    "fuelWindowDays": 5,
+    "fuelEthBelow": 1.5
   },
 
   "notify": {
