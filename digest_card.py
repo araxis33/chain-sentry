@@ -177,8 +177,10 @@ def render(results, header, path, log=None):
                 logo = _logo(row["logo"], cache_dir)
                 if logo is not None:
                     image.paste(logo, (PAD + 8, y + 2), logo)
-                else:
-                    draw.ellipse((PAD + 16, y + 8, PAD + 34, y + 26), fill=colour)
+                # A row without a logo used to get a coloured dot in this spot. A
+                # column of those is decoration rather than information -- "just
+                # coloured balls" was the verdict -- and the same colour already runs
+                # down the right edge of every row. Nothing is drawn here now.
                 for line in row["head"]:
                     draw.text((TEXT_LEFT, y), line, font=fonts["row"], fill=TEXT)
                     y += 34

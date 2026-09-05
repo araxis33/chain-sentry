@@ -650,7 +650,7 @@ def measure_wallet(cfg, log, known=None, scanned_to=0, discovered=None):
 def digest_wallet(now, text, previous_total=None):
     change = (now["totalUsd"] - previous_total) if previous_total else None
     lines = [row(sign_of(change), text["walletTotal"].format(
-        total=bold(fmt_usd(now["totalUsd"])), kept=len(now["holdings"]),
+        total=num(fmt_usd(now["totalUsd"])), kept=len(now["holdings"]),
         spam=now["spamCount"]))]
     for holding in now["holdings"][:8]:
         change = holding.get("change24")
@@ -671,7 +671,7 @@ def evaluate_wallet(cfg, now, state, text):
         move = (now["totalUsd"] - previous) / previous * 100
         if abs(move) >= th["totalMovePercent"]:
             alerts.append(mark(text, sign_of(move)) + " " + text["walletMoved"].format(
-                move=round(move, 1), was=fmt_usd(previous), now=bold(fmt_usd(now["totalUsd"]))))
+                move=round(move, 1), was=fmt_usd(previous), now=num(fmt_usd(now["totalUsd"]))))
 
     # A total hides the thing worth knowing. On 2026-09-04 this wallet held PONS up 32%
     # and Index down over the same day; the two cancelled to -1.8% and the watcher said
@@ -689,7 +689,7 @@ def evaluate_wallet(cfg, now, state, text):
         flags.pop(opposite, None)
         if loud and not flags.get(key):
             alerts.append(mark(text, sign_of(change)) + " " + text["walletTokenMoved"].format(
-                symbol=esc(holding["symbol"]), change=bold(fmt_change(change)),
+                symbol=esc(holding["symbol"]), change=num(fmt_change(change)),
                 usd=fmt_usd(holding["usd"]))
                 + "\n" + coin_card(holding, text, held_usd=holding['usd']))
         flags[key] = loud
@@ -774,7 +774,7 @@ def evaluate_tokens(cfg, now, state, text):
             if not flags.get(key):
                 alerts.append(mark(text, sign_of(change)) + " " + text["tokenMoved"].format(
                     label=esc(row["label"]), change=round(change, 1),
-                    price=bold(fmt_usd(row["price"])))
+                    price=num(fmt_usd(row["price"])))
                     + "\n" + coin_card(row, text))
                 flags[key] = True
         thin_key = "thin:" + row["address"]
@@ -853,8 +853,8 @@ def digest_revenue(now, text):
     # "info", not "digest": the card's palette has no colour for the latter, and a
     # grey line reads as a dead one.
     return [row("info", text["digestRevenue"].format(
-        label=esc(now["label"]), day=now["latestDay"], value=bold(fmt_usd(now["latestValue"])),
-        days=now["windowDays"], average=bold(fmt_usd(now["average"])),
+        label=esc(now["label"]), day=now["latestDay"], value=num(fmt_usd(now["latestValue"])),
+        days=now["windowDays"], average=num(fmt_usd(now["average"])),
         peak=fmt_usd(now["peak"]), peakDay=now["peakDay"], offPeak=round(off_peak),
         buyback=buyback))]
 
@@ -888,12 +888,12 @@ def evaluate_revenue(cfg, now, state, text):
         if level == "broken":
             alerts.append(mark(text, "alarm") + " " + text["revenueBroken"].format(
                 label=esc(now["label"]), days=now["windowDays"],
-                average=bold(fmt_usd(average)), limit=fmt_usd(alarm_at),
+                average=num(fmt_usd(average)), limit=fmt_usd(alarm_at),
                 offPeak=round(off_peak), detail=detail))
         elif level == "sliding":
             alerts.append(mark(text, "warn") + " " + text["revenueSliding"].format(
                 label=esc(now["label"]), days=now["windowDays"],
-                average=bold(fmt_usd(average)), limit=fmt_usd(warn_at),
+                average=num(fmt_usd(average)), limit=fmt_usd(warn_at),
                 offPeak=round(off_peak), detail=detail))
         elif cfg.get("alertOnRecovery", True):
             alerts.append(mark(text, "up") + " "
@@ -1082,7 +1082,7 @@ def digest_lp(now, text):
     for entry in now["rows"]:
         if entry["inside"]:
             lines.append(row("warn" if entry["near"] else "up", text["lpLine"].format(
-                label=esc(entry["label"]), price=bold(fmt_usd(entry["price"])),
+                label=esc(entry["label"]), price=num(fmt_usd(entry["price"])),
                 low=fmt_usd(entry["low"]), high=fmt_usd(entry["high"]),
                 at=round(entry["atPercent"]), down=round(entry["toLow"], 2),
                 up=round(entry["toHigh"], 2), stock=round(entry["stockPercent"]),
@@ -1091,7 +1091,7 @@ def digest_lp(now, text):
         else:
             side = text["lpBelow"] if entry["price"] <= entry["low"] else text["lpAbove"]
             lines.append(row("down", text["lpLineOut"].format(
-                label=esc(entry["label"]), price=bold(fmt_usd(entry["price"])), side=side,
+                label=esc(entry["label"]), price=num(fmt_usd(entry["price"])), side=side,
                 low=fmt_usd(entry["low"]), high=fmt_usd(entry["high"]),
                 value=fmt_usd(entry["valueUsd"]), fees=fmt_small(entry["feesUsd"]))))
         lines[-1]["bar"] = {"at": entry["atPercent"], "inside": entry["inside"]}
@@ -1110,11 +1110,11 @@ def evaluate_lp(cfg, now, state, text):
         if is_out and not was_out:
             side = text["lpBelow"] if row["price"] <= row["low"] else text["lpAbove"]
             alerts.append(mark(text, "alarm") + " " + text["lpOut"].format(
-                label=esc(row["label"]), side=side, price=bold(fmt_usd(row["price"])),
+                label=esc(row["label"]), side=side, price=num(fmt_usd(row["price"])),
                 low=fmt_usd(row["low"]), high=fmt_usd(row["high"])))
         elif was_out and not is_out:
             alerts.append(mark(text, "up") + " " + text["lpBack"].format(
-                label=esc(row["label"]), price=bold(fmt_usd(row["price"])),
+                label=esc(row["label"]), price=num(fmt_usd(row["price"])),
                 at=round(row["atPercent"])))
         flags[out_key] = is_out
 
@@ -1225,10 +1225,29 @@ def bold(value):
     return "<b>" + esc(value) + "</b>"
 
 
+def num(value):
+    """A measured number, set in the monospace face.
+
+    Bold was doing this job and doing it badly: on a line with four figures,
+    everything shouted and the eye had nothing to land on. Monospace makes the
+    digits line up between lines and reads, in Telegram's dark theme, the way a
+    number is supposed to read next to a word."""
+    return "<code>" + esc(value) + "</code>"
+
+
 def mark(text, kind):
-    """Telegram has no coloured text. A coloured circle in front of the line is the
-    closest thing to it, and it survives copy-paste and notification previews."""
+    """The marker for a line. Direction is an arrow, trouble is a red circle.
+
+    It used to be a coloured circle in front of every line, and with a dozen lines
+    that is a column of decorative dots carrying no information -- his words were
+    "just coloured balls". Now the line starts with an icon that says what the line
+    is about, and the marker only appears where it means something: which way a
+    number moved, or that something needs attention."""
     return text.get("marks", {}).get(kind, "")
+
+
+# Direction reads better after the number it describes, the way a ticker prints it.
+TRAILING_MARKS = ("up", "down", "flat", "info")
 
 
 def sign_of(change, flat="flat"):
@@ -1250,8 +1269,14 @@ def row(kind, body, logo=None):
 
 
 def as_text(lines, text):
-    return "\n".join(("%s %s" % (mark(text, line["kind"]), line["text"])).strip()
-                     for line in lines)
+    out = []
+    for line in lines:
+        glyph = mark(text, line["kind"])
+        if line["kind"] in TRAILING_MARKS:
+            out.append(("%s %s" % (line["text"], glyph)).strip())
+        else:
+            out.append(("%s %s" % (glyph, line["text"])).strip())
+    return "\n".join(out)
 
 
 def fmt_change(change):
@@ -1363,7 +1388,7 @@ def digest(now, text, previous_price=None):
     return [
         row(sign_of(day_change), text["digestDay"].format(
             day=last, launches=now["launchesByDay"].get(last, 0),
-            revenue=bold(fmt_usd(revenue)))),
+            revenue=num(fmt_usd(revenue)))),
         row("info", text["digestBurn"].format(
             burned=format(int(round(now["burned"])), ","),
             burnedPercent=round(now["burnedPercent"], 2))),
@@ -1373,7 +1398,7 @@ def digest(now, text, previous_price=None):
         row("info", text["digestFuel"].format(
             eth=("%.2f" % now.get("fuelWindow", 0)), days=now.get("fuelWindowDays", 0))),
         row(sign_of(price_change), text["digestMarket"].format(
-            price=bold(fmt_usd(now["price"])), cap=fmt_usd(now["marketCap"]),
+            price=num(fmt_usd(now["price"])), cap=fmt_usd(now["marketCap"]),
             liquidity=fmt_usd(now["liquidity"])), logo=now.get("imageUrl")),
     ]
 
