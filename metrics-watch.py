@@ -877,9 +877,44 @@ def evaluate_revenue(cfg, now, state, text):
     return alerts, flags
 
 
-def top_child(state, fresh_children, limit):
+SEL_LAUNCHER = "0x16eebd1e"  # launcher() -- only coins born on the launchpad answer it
+
+
+def launchpad_coins(rpc, token, candidates, log):
+    """Keep the coins the launchpad made, drop whatever they are priced against.
+
+    A fee event names both sides of the pool, so every quote asset lands in the same
+    bag as the coin: cbDOGE -- Coinbase's wrapped Dogecoin, nothing to do with this
+    launchpad -- sat there at a $9.4M cap and tripped the "the launchpad finally has
+    a hit" alarm. A coin from the launchpad answers launcher() with the launcher's
+    address; everything else reverts. Unreadable answer on the watched token -> keep
+    the whole list, the same as before this check existed.
+    """
+    try:
+        expected = addr_of(rpc.call("eth_call", [{"to": token, "data": SEL_LAUNCHER}, "latest"]))
+    except Exception:  # noqa: BLE001 - no launcher() to compare against, so nothing to filter by
+        return list(candidates)
+    if int(expected, 16) == 0:
+        return list(candidates)
+
+    kept, dropped = [], []
+    for address in candidates:
+        try:
+            answer = rpc.call("eth_call", [{"to": address, "data": SEL_LAUNCHER}, "latest"])
+        except Exception:  # noqa: BLE001 - a revert is the answer: not a launchpad coin
+            answer = None
+        (kept if answer and len(answer) >= 66 and addr_of(answer) == expected
+         else dropped).append(address)
+    if dropped:
+        log("dropped %d address(es) that a launch was priced against, not coins: %s"
+            % (len(dropped), ", ".join(dropped[:4])))
+    return kept
+
+
+def top_child(rpc, token, state, fresh_children, limit, log):
     """Largest market cap among coins the launchpad has produced."""
-    known = sorted(set(state.get("childTokens", [])) | set(fresh_children))
+    known = launchpad_coins(
+        rpc, token, sorted(set(state.get("childTokens", [])) | set(fresh_children)), log)
     if not known:
         return 0, None, known
     prices = dexscreener_tokens(known[:limit])
@@ -1507,7 +1542,9 @@ def process_one(cfg_path, log):
         # the launchpad produced start out populated instead of empty.
         days_back = cfg["seedDays"] if first_run else cfg["windowDays"]
         now = measure(cfg, rpc, log, days_back)
-        cap, symbol, known_children = top_child(state, now["childTokens"], cfg["watch"]["childScanLimit"])
+        cap, symbol, known_children = top_child(
+            rpc, cfg["watch"]["token"], state, now["childTokens"],
+            cfg["watch"]["childScanLimit"], log)
         now["topChildMcap"] = cap
         now["topChildSymbol"] = symbol
 
