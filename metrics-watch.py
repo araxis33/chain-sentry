@@ -715,12 +715,22 @@ def evaluate_wallet(cfg, now, state, text):
 
 
 def measure_tokens(cfg, log):
-    """Profile 'tokens': a named watchlist, whatever chain each one lives on."""
+    """Profile 'tokens': a named watchlist, whatever chain each one lives on.
+
+    Each token is asked for on its own chain. Without that, an address is only
+    unique within one chain and a namesake elsewhere can win the deepest-pool
+    contest: that is how CASHCAT on Robinhood Chain once got priced at 7.0e26
+    dollars. The wallet profile has named its chain since 04.09; this one did
+    not, and it watches Robinhood Chain coins, where namesakes are common.
+    `chain` can be set once for the watchlist or per token.
+    """
     entries = cfg["watch"]["tokens"]
-    prices = dexscreener_tokens([e["address"].lower() for e in entries], batch_size=1)
+    default_chain = cfg["watch"].get("chain")
     rows = []
     for entry in entries:
-        info = prices.get(entry["address"].lower(), {})
+        address = entry["address"].lower()
+        chain = entry.get("chain", default_chain)
+        info = dexscreener_tokens([address], batch_size=1, chain=chain).get(address, {})
         rows.append(dict(info, **{
             "label": entry.get("label") or info.get("symbol") or entry["address"][:10],
             "address": entry["address"].lower(),
