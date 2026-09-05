@@ -1311,8 +1311,15 @@ def coin_card(info, text, held_usd=None):
     """
     lines = []
     price = info.get("price") or 0
-    head = "%s  %s" % (bold(esc(info.get("symbol") or "?")),
-                       fmt_usd(price) if price else "-")
+    # This is the line a person reads in the notification preview, so it carries the
+    # four things worth knowing before opening anything: which coin, what it costs,
+    # what the whole thing is worth, and which way it is going.
+    cap_now = info.get("marketCap") or 0
+    head = "🪙 %s %s" % (bold(esc(info.get("symbol") or "?")),
+                         num(fmt_usd(price)) if price else "-")
+    if cap_now:
+        head += " " + num("[%s]" % fmt_usd(cap_now))
+    head = (head + " " + mark(text, sign_of(info.get("change24")))).strip()
     if held_usd:
         head += "  " + text["cardHeld"].format(usd=fmt_usd(held_usd))
     lines.append(head)
@@ -1324,7 +1331,9 @@ def coin_card(info, text, held_usd=None):
 
     liq = info.get("liquidityTotal") or info.get("liquidity") or 0
     cap = info.get("marketCap") or 0
-    ratio = ("  [×%d]" % round(cap / liq)) if liq and cap else ""
+    # Cap against pool depth, as a single number: 9 means the whole coin is worth
+    # nine times what sits in its pools, and that is the exit test.
+    ratio = (" " + num("[×%d]" % round(cap / liq))) if liq and cap else ""
     lines.append(text["cardDepth"].format(cap=fmt_usd(cap) if cap else "-",
                                           liq=fmt_usd(liq) if liq else "-", ratio=ratio,
                                           vol=fmt_usd(info.get("volume24") or 0)))

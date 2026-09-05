@@ -23,7 +23,7 @@
   "walletTokenMoved": "МОНЕТА ДРОГНУЛА: <b>{symbol}</b> {change} за сутки, у тебя её на <code>{usd}</code>.",
   "cardHeld": "· 🎒 у тебя <code>{usd}</code>",
   "cardWindows": "🕐 1ч <code>{h1}</code> · 6ч <code>{h6}</code> · 24ч <code>{h24}</code>",
-  "cardDepth": "💎 Капа <code>{cap}</code> · 💦 Ликв <code>{liq}</code>{ratio} · 📊 Оборот <code>{vol}</code>",
+  "cardDepth": "💦 Ликв <code>{liq}</code>{ratio} · 📊 Оборот <code>{vol}</code>",
   "cardFlow": "Ⓑ <code>{buys}</code> Ⓢ <code>{sells}</code>",
   "cardAge": "возраст <code>{age}</code>",
   "cardPools": "пулов <code>{n}</code>",

@@ -23,7 +23,7 @@
   "walletTokenMoved": "COIN MOVED: <b>{symbol}</b> {change} over the day, and you hold <code>{usd}</code> of it.",
   "cardHeld": "· 🎒 you hold <code>{usd}</code>",
   "cardWindows": "🕐 1h <code>{h1}</code> · 6h <code>{h6}</code> · 24h <code>{h24}</code>",
-  "cardDepth": "💎 Cap <code>{cap}</code> · 💦 Liq <code>{liq}</code>{ratio} · 📊 Vol <code>{vol}</code>",
+  "cardDepth": "💦 Liq <code>{liq}</code>{ratio} · 📊 Vol <code>{vol}</code>",
   "cardFlow": "Ⓑ <code>{buys}</code> Ⓢ <code>{sells}</code>",
   "cardAge": "age <code>{age}</code>",
   "cardPools": "<code>{n}</code> pools",
