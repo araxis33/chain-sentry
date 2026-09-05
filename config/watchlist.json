@@ -26,6 +26,12 @@
       {
         "label": "CASHCAT",
         "address": "0x020bfc650a365f8bb26819deaabf3e21291018b4"
+      },
+      {
+        "label": "STONKEX",
+        "address": "0x5ab000ff9b9ffe0349ce5ffa5fd86f217c3680f5",
+        "chain": "base",
+        "alertBelowUsd": 0.004
       }
     ]
   },
