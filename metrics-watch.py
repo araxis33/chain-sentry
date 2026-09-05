@@ -1315,8 +1315,8 @@ def coin_card(info, text, held_usd=None):
     # four things worth knowing before opening anything: which coin, what it costs,
     # what the whole thing is worth, and which way it is going.
     cap_now = info.get("marketCap") or 0
-    head = "🪙 %s %s" % (bold(esc(info.get("symbol") or "?")),
-                         num(fmt_usd(price)) if price else "-")
+    head = "%s %s" % (bold(esc(info.get("symbol") or "?")),
+                      num(fmt_usd(price)) if price else "-")
     if cap_now:
         head += " " + num("[%s]" % fmt_usd(cap_now))
     head = (head + " " + mark(text, sign_of(info.get("change24")))).strip()
