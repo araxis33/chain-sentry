@@ -49,6 +49,7 @@
   "walletLine": "<b>{symbol}</b> <code>{usd}</code> 24h <code>{change}</code>",
   "tokenLine": "<b>{label}</b> <code>{price}</code> 24h <code>{change}</code> · cap <code>{cap}</code> · liq <code>{liq}</code>",
   "tokenMissing": "<b>{label}</b> — no market data",
+  "tokenBelow": "PRICE AT YOUR LEVEL: <b>{label}</b> is down to <code>{price}</code> against your <code>{limit}</code> line — the moment you were waiting for.",
   "tokenMoved": "<b>{label}</b> moved <code>{change}%</code> in a day, now {price}.",
   "tokenThin": "LIQUIDITY IS THIN: only <code>{liq}</code> left under <b>{label}</b> against a <code>{limit}</code> floor.",
   "lpBelow": "below",

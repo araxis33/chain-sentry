@@ -740,6 +740,7 @@ def measure_tokens(cfg, log):
             "marketCap": info.get("marketCap", 0),
             "found": bool(info),
             "imageUrl": info.get("imageUrl"),
+            "alertBelowUsd": entry.get("alertBelowUsd"),
         }))
     missing = [r["label"] for r in rows if not r["found"]]
     if missing:
@@ -777,6 +778,21 @@ def evaluate_tokens(cfg, now, state, text):
                     price=num(fmt_usd(row["price"])))
                     + "\n" + coin_card(row, text))
                 flags[key] = True
+        # A price level the user is waiting for. Fires once on the way down and
+        # rearms only after the price climbs 2% clear of the line, so a coin
+        # hovering on it does not ring all night.
+        floor = row.get("alertBelowUsd")
+        if floor and row["price"] > 0:
+            below_key = "below:" + row["address"]
+            if row["price"] <= floor and not flags.get(below_key):
+                alerts.append(mark(text, "alarm") + " " + text["tokenBelow"].format(
+                    label=esc(row["label"]), price=num(fmt_usd(row["price"])),
+                    limit=num(fmt_usd(floor)))
+                    + "\n" + coin_card(row, text))
+                flags[below_key] = True
+            elif row["price"] > floor * 1.02:
+                flags[below_key] = False
+
         thin_key = "thin:" + row["address"]
         is_thin = 0 < row["liquidity"] < th["liquidityBelowUsd"]
         if is_thin and not flags.get(thin_key):

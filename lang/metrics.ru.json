@@ -49,6 +49,7 @@
   "walletLine": "<b>{symbol}</b> <code>{usd}</code> за сутки <code>{change}</code>",
   "tokenLine": "<b>{label}</b> <code>{price}</code> за сутки <code>{change}</code> · капа <code>{cap}</code> · ликв <code>{liq}</code>",
   "tokenMissing": "<b>{label}</b> — рыночных данных нет",
+  "tokenBelow": "ЦЕНА НА ТВОЁМ УРОВНЕ: <b>{label}</b> опустился до <code>{price}</code> при уровне <code>{limit}</code> — то самое, чего ждал.",
   "tokenMoved": "<b>{label}</b> двинулся на <code>{change}%</code> за сутки, сейчас {price}.",
   "tokenThin": "ЛИКВИДНОСТЬ ТОНКАЯ: под <b>{label}</b> осталось <code>{liq}</code> при пороге <code>{limit}</code>.",
   "lpBelow": "ниже",
