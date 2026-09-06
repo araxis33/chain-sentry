@@ -38,7 +38,9 @@
     "fuelDry": "топливо выкупа",
     "revenueSliding": "состояние выручки",
     "revenueBroken": "состояние выручки",
-    "revenueStale": "поступление данных о выручке"
+    "revenueStale": "поступление данных о выручке",
+    "lockedReleasing": "навес на вестинге",
+    "lockedFloor": "запертая доля"
   },
   "digestDay": "📅 За {day}: запусков <code>{launches}</code>, выручка {revenue}",
   "digestBurn": "🔥 Сожжено <code>{burned}</code> токенов = <code>{burnedPercent}%</code> эмиссии",
@@ -63,5 +65,9 @@
   "revenueBuyback": " · выкуп при таком темпе около <code>{buyback}</code> в сутки",
   "revenueSliding": "ВЫРУЧКА СПОЛЗАЕТ: <b>{label}</b> — среднее за <code>{days} дн.</code> {average}, ниже порога <code>{limit}</code> и на <code>{offPeak}%</code> ниже пика. По дням: {detail}. Выкуп сжимается ровно во столько же раз.",
   "revenueBroken": "ВЫРУЧКА СЛОМАЛАСЬ: <b>{label}</b> — среднее за <code>{days} дн.</code> {average}, это ниже <code>{limit}</code> и на <code>{offPeak}%</code> ниже пика. По дням: {detail}. На такие деньги выкуп цену уже не держит.",
-  "revenueStale": "ЦИФР НЕТ: по <b>{label}</b> последний закрытый день — {day}, это <code>{days} дн.</code> назад. Молчащий источник выглядит как здоровье, но им не является."
+  "revenueStale": "ЦИФР НЕТ: по <b>{label}</b> последний закрытый день — {day}, это <code>{days} дн.</code> назад. Молчащий источник выглядит как здоровье, но им не является.",
+  "digestLocked": "🔒 <b>{label}</b>: заперто <code>{percent}%</code> supply — {tokens} монет на {value}. С прошлого замера не сдвинулось.",
+  "digestLockedReleased": "🔓 <b>{label}</b>: заперто <code>{percent}%</code> supply ({tokens} монет, {value}). От максимума уже роздано <code>{released}%</code> supply.",
+  "lockedReleasing": "НАВЕС ПОШЁЛ В РЫНОК: у <b>{label}</b> было заперто <code>{was}%</code> supply, стало <code>{percent}%</code>. Роздано <code>{released}%</code> supply — это {tokens} монет на {value}. Разлочка началась, цену это давит независимо от новостей.",
+  "lockedFloor": "ЗАПЕРТО МЕНЬШЕ ПОРОГА: у <b>{label}</b> осталось <code>{percent}%</code> supply при пороге <code>{limit}%</code>."
 }

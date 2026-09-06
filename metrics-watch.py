@@ -921,6 +921,118 @@ def evaluate_revenue(cfg, now, state, text):
     return alerts, flags
 
 
+# --------------------------------------------------------------- locked supply
+
+SEL_TOTAL_SUPPLY = "0x18160ddd"
+SEL_ERC20_BALANCE = "0x70a08231"  # balanceOf(address) -- the ERC-20 one, not ERC-6909
+
+
+def measure_locked(cfg, rpc, log):
+    """Profile 'locked': how much of a supply still sits where it cannot be sold.
+
+    A vesting overhang is invisible on a price chart until it lands on the market,
+    and by then the move has happened. It is perfectly visible as a balance: the
+    tokens wait in the token's own contract, or in a vesting contract, and the day
+    that balance starts falling is the day they are being handed out.
+
+    Measured as a share of total supply, never as a raw number. A supply that moves
+    on its own -- a burn, a mint -- changes the raw balance's meaning without a
+    single token having been released.
+    """
+    watch = cfg["watch"]
+    token = watch["token"]
+    decimals = uint_of(words(call_view(rpc, token, SEL_DECIMALS), 1)[0]) or 18
+    supply = uint_of(words(call_view(rpc, token, SEL_TOTAL_SUPPLY), 1)[0]) / 10.0 ** decimals
+
+    holders, locked = [], 0.0
+    for entry in watch["holders"]:
+        raw = call_view(rpc, token, SEL_ERC20_BALANCE + pad_addr(entry["address"])[2:])
+        amount = uint_of(words(raw, 1)[0]) / 10.0 ** decimals
+        holders.append({
+            "label": entry.get("label") or entry["address"][:10],
+            "address": entry["address"].lower(),
+            "amount": amount,
+            "percent": (100.0 * amount / supply) if supply else 0.0,
+        })
+        locked += amount
+
+    info = dexscreener_tokens([token.lower()], batch_size=1,
+                              chain=watch.get("chain")).get(token.lower(), {})
+    price = info.get("price", 0) or 0
+    percent = (100.0 * locked / supply) if supply else 0.0
+
+    log("locked: %.2f%% of supply (%s of %s tokens) in %d holder(s), worth %s at %s" % (
+        percent, format(int(locked), ","), format(int(supply), ","),
+        len(holders), fmt_usd(locked * price), fmt_usd(price)))
+
+    return {
+        "measuredAt": int(time.time()),
+        "label": watch.get("label") or info.get("symbol") or token[:10],
+        "supply": supply,
+        "locked": locked,
+        "percent": percent,
+        "holders": holders,
+        "price": price,
+        "valueUsd": locked * price,
+    }
+
+
+def digest_locked(now, text, peak):
+    """One line: what is still locked, and how much of it has already gone."""
+    released = max(0.0, (now["percent"] if peak is None else peak) - now["percent"])
+    # The percent goes in raw: the lang string wraps it together with its "%" sign,
+    # the way offPeak does. Passing it through num() would nest one <code> in another.
+    common = dict(label=esc(now["label"]), percent="%.2f" % now["percent"],
+                  tokens=format(int(now["locked"]), ","), value=fmt_usd(now["valueUsd"]))
+    if released <= 0:
+        return [row("info", text["digestLocked"].format(**common))]
+    return [row("down", text["digestLockedReleased"].format(
+        released="%.2f" % released, **common))]
+
+
+def evaluate_locked(cfg, now, state, text):
+    """Alerts on the locked share FALLING, and only on that.
+
+    Compared against the highest share ever seen, not against the previous run: a
+    release that drips a tenth of a percent per run would never look like a move
+    against yesterday and would still be the whole overhang leaving. The high-water
+    mark also means tokens moving IN raise the bar -- deliberately, because the
+    exposure is to what can be sold, and a bigger pile that later shrinks back is
+    still a release of the same size.
+    """
+    th = cfg["thresholds"]
+    flags = dict(state.get("flags", {}))
+    alerts = []
+
+    previous_peak = state.get("peakPercent")
+    peak = now["percent"] if previous_peak is None else max(previous_peak, now["percent"])
+    released = peak - now["percent"]
+
+    # Announce once per step crossed, not once per run: a release that keeps going
+    # keeps reporting, a share that stops moving goes quiet on its own.
+    step = float(th.get("dropPercentPoints", 0.25))
+    steps_now = int(released / step) if step > 0 else 0
+    steps_seen = 0 if peak > (previous_peak or 0) else int(flags.get("releasedSteps", 0))
+    if steps_now > steps_seen:
+        alerts.append(mark(text, "alarm") + " " + text["lockedReleasing"].format(
+            label=esc(now["label"]), was="%.2f" % peak,
+            percent="%.2f" % now["percent"], released="%.2f" % released,
+            tokens=format(int(released / 100.0 * now["supply"]), ","),
+            value=fmt_usd(released / 100.0 * now["supply"] * now["price"])))
+    flags["releasedSteps"] = max(steps_now, steps_seen)
+
+    floor = th.get("floorPercent")
+    if floor is not None:
+        below = now["percent"] < float(floor)
+        if below and not flags.get("lockedBelowFloor", False):
+            alerts.append(mark(text, "alarm") + " " + text["lockedFloor"].format(
+                label=esc(now["label"]), percent="%.2f" % now["percent"],
+                limit="%.2f" % float(floor)))
+        flags["lockedBelowFloor"] = below
+
+    return alerts, flags, peak
+
+
 SEL_LAUNCHER = "0x16eebd1e"  # launcher() -- only coins born on the launchpad answer it
 
 
@@ -1613,6 +1725,16 @@ def process_one(cfg_path, log):
         state_out = {"baseline": True, "measuredAt": now["measuredAt"],
                      "lastAverage": now["average"], "lastDay": now["latestDay"],
                      "flags": flags}
+    elif profile == "locked":
+        now = measure_locked(cfg, Rpc(cfg["watch"]["rpc"]), log)
+        peak = state.get("peakPercent")
+        lines = digest_locked(now, text, peak)
+        if first_run:
+            alerts, flags, peak_out = [], {}, now["percent"]
+        else:
+            alerts, flags, peak_out = evaluate_locked(cfg, now, state, text)
+        state_out = {"baseline": True, "measuredAt": now["measuredAt"],
+                     "percent": now["percent"], "peakPercent": peak_out, "flags": flags}
     elif profile == "lp":
         now = measure_lp(cfg, Rpc(cfg["rpc"]), log)
         lines = digest_lp(now, text)

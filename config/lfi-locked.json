@@ -1,0 +1,33 @@
+{
+  "name": "LFI — навес на вестинге",
+  "profile": "locked",
+  "language": "ru",
+  "stateFile": "state/lfi-locked-state.json",
+
+  "watch": {
+    "token": "0x3722264aB15a1dfCe5a5af89e6547F7949A8ABA3",
+    "label": "LFI",
+    "chain": "base",
+    "rpc": [
+      "https://base-rpc.publicnode.com",
+      "https://mainnet.base.org",
+      "https://base.llamarpc.com"
+    ],
+    "holders": [
+      {
+        "label": "контракт токена",
+        "address": "0x3722264aB15a1dfCe5a5af89e6547F7949A8ABA3"
+      }
+    ]
+  },
+
+  "thresholds": {
+    "dropPercentPoints": 0.25,
+    "floorPercent": 26.5
+  },
+
+  "notify": {
+    "tokenEnv": "TELEGRAM_BOT_TOKEN",
+    "chatEnv": "TELEGRAM_CHAT_ID"
+  }
+}

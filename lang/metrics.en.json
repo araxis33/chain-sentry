@@ -38,7 +38,9 @@
     "fuelDry": "buyback fuel",
     "revenueSliding": "revenue",
     "revenueBroken": "revenue",
-    "revenueStale": "the revenue feed"
+    "revenueStale": "the revenue feed",
+    "lockedReleasing": "the vesting overhang",
+    "lockedFloor": "the locked share"
   },
   "digestDay": "📅 On {day}: <code>{launches}</code> launches, {revenue} revenue",
   "digestBurn": "🔥 Burned <code>{burned}</code> tokens = <code>{burnedPercent}%</code> of supply",
@@ -63,5 +65,9 @@
   "revenueBuyback": " · at that rate the buyback is about <code>{buyback}</code> a day",
   "revenueSliding": "REVENUE IS SLIDING: <b>{label}</b> — <code>{days}-day</code> average {average}, under the <code>{limit}</code> line and <code>{offPeak}%</code> off the peak. By day: {detail}. The buyback shrinks by exactly the same factor.",
   "revenueBroken": "REVENUE HAS BROKEN: <b>{label}</b> — <code>{days}-day</code> average {average}, under <code>{limit}</code> and <code>{offPeak}%</code> off the peak. By day: {detail}. A buyback that size no longer holds the price.",
-  "revenueStale": "NO FIGURES: <b>{label}</b>'s last complete day is {day}, <code>{days} days</code> ago. A silent source looks like health and is not."
+  "revenueStale": "NO FIGURES: <b>{label}</b>'s last complete day is {day}, <code>{days} days</code> ago. A silent source looks like health and is not.",
+  "digestLocked": "🔒 <b>{label}</b>: <code>{percent}%</code> of supply still locked — {tokens} tokens, {value}. Unchanged since the last reading.",
+  "digestLockedReleased": "🔓 <b>{label}</b>: <code>{percent}%</code> of supply locked ({tokens} tokens, {value}). <code>{released}%</code> of supply already released from the peak.",
+  "lockedReleasing": "THE OVERHANG IS MOVING: <b>{label}</b> held <code>{was}%</code> of supply locked, now <code>{percent}%</code>. <code>{released}%</code> of supply released — {tokens} tokens, {value}. Vesting has started; it presses the price regardless of news.",
+  "lockedFloor": "LOCKED BELOW THE LINE: <b>{label}</b> has <code>{percent}%</code> of supply locked against a floor of <code>{limit}%</code>."
 }
