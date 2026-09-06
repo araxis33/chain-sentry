@@ -142,7 +142,7 @@ in JSON sidesteps that entirely.
 from an RPC node and doing the arithmetic itself. It keeps both design rules above:
 alert on a change of state, and stay silent on the first run while it records a baseline.
 
-Four profiles, chosen per config with `"profile"`:
+Six profiles, chosen per config with `"profile"`:
 
 | profile | what it measures | alerts on |
 |---|---|---|
@@ -150,6 +150,32 @@ Four profiles, chosen per config with `"profile"`:
 | `tokens` | a named watchlist: price, 24h move, market cap, liquidity | a daily move past `movePercent`, liquidity under `liquidityBelowUsd` |
 | `wallet` | what an address actually holds, airdrop spam filtered out by USD value | total value moving past `totalMovePercent`, liquidity draining under a holding |
 | `lp` | concentrated liquidity positions: whether the price is still inside the range, how far the nearest edge is, what the position now consists of, fees accrued | leaving the range, coming back into it, and coming within `edgePercent` of an edge |
+| `revenue` | what a protocol earns per day, from DefiLlama, averaged over complete days only | the average falling under `warnBelowUsd` or `alarmBelowUsd`, and the source going quiet |
+| `locked` | the share of a supply still sitting where it cannot be sold — a vesting contract, or the token's own contract | that share falling by `dropPercentPoints`, or dropping under `floorPercent` |
+
+### The `locked` profile
+
+A vesting overhang is invisible on a price chart until it lands on the market, and by
+then the move has already happened. It is perfectly visible as a **balance**: the tokens
+wait in a contract, and the day that balance starts falling is the day they are being
+handed out. So the profile reads `totalSupply()` and the `balanceOf` of every address
+listed under `holders`, and reports the share.
+
+The share, never the raw number: a supply that moves on its own — a burn, a mint — would
+change what the raw balance means without a single token having been released.
+
+Two rules keep it honest:
+
+* it compares against the **highest share ever seen**, not against the previous run. A
+  release that drips a tenth of a percent per run would never look like a move against
+  yesterday, and would still be the whole overhang leaving.
+* it announces **once per step crossed** (`dropPercentPoints`), so a release that keeps
+  going keeps reporting, while a share that stops moving goes quiet on its own.
+
+Only a fall is news. Tokens moving back *in* raise the bar and say nothing — the exposure
+is to what can be sold.
+
+See `config/lfi-locked.json`.
 
 ### The `lp` profile
 
