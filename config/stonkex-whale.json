@@ -1,0 +1,34 @@
+{
+  "name": "STONKEX — мешок крупного держателя",
+  "profile": "locked",
+  "language": "ru",
+  "stateFile": "state/stonkex-whale-state.json",
+
+  "watch": {
+    "token": "0x5ab000ff9B9FfE0349CE5ffA5fD86f217C3680F5",
+    "label": "STONKEX / кит 0x211c…0b4d",
+    "chain": "base",
+    "wording": "wallet",
+    "rpc": [
+      "https://mainnet.base.org",
+      "https://base-rpc.publicnode.com",
+      "https://base.llamarpc.com"
+    ],
+    "holders": [
+      {
+        "label": "0x211c8e97a504d2d142bc945334d4a88bd3270b4d",
+        "address": "0x211c8e97a504d2d142bc945334d4a88bd3270b4d"
+      }
+    ]
+  },
+
+  "thresholds": {
+    "dropPercentPoints": 0.1,
+    "floorPercent": 0.3
+  },
+
+  "notify": {
+    "tokenEnv": "TELEGRAM_BOT_TOKEN",
+    "chatEnv": "TELEGRAM_CHAT_ID"
+  }
+}

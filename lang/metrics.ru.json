@@ -40,7 +40,9 @@
     "revenueBroken": "состояние выручки",
     "revenueStale": "поступление данных о выручке",
     "lockedReleasing": "навес на вестинге",
-    "lockedFloor": "запертая доля"
+    "lockedFloor": "запертая доля",
+    "lockedReleasing.wallet": "мешок крупного держателя",
+    "lockedFloor.wallet": "остаток мешка"
   },
   "digestDay": "📅 За {day}: запусков <code>{launches}</code>, выручка {revenue}",
   "digestBurn": "🔥 Сожжено <code>{burned}</code> токенов = <code>{burnedPercent}%</code> эмиссии",
@@ -70,5 +72,9 @@
   "digestLockedReleased": "🔓 <b>{label}</b>: заперто <code>{percent}%</code> supply ({tokens} монет, {value}). От максимума уже роздано <code>{released}%</code> supply.",
   "lockedReleasing": "НАВЕС ПОШЁЛ В РЫНОК: у <b>{label}</b> было заперто <code>{was}%</code> supply, стало <code>{percent}%</code>. Роздано <code>{released}%</code> supply — это {tokens} монет на {value}. Разлочка началась, цену это давит независимо от новостей.",
   "lockedFloor": "ЗАПЕРТО МЕНЬШЕ ПОРОГА: у <b>{label}</b> осталось <code>{percent}%</code> supply при пороге <code>{limit}%</code>.",
-  "digestFuelSplit": " — своё <code>{own}%</code>, с чужих монет <code>{others}%</code>"
+  "digestFuelSplit": " — своё <code>{own}%</code>, с чужих монет <code>{others}%</code>",
+  "digestLocked.wallet": "🐳 <b>{label}</b>: держит <code>{percent}%</code> эмиссии — {tokens} монет на {value}. С прошлого замера не сдвинулся.",
+  "digestLockedReleased.wallet": "🐳 <b>{label}</b>: осталось <code>{percent}%</code> эмиссии ({tokens} монет, {value}). От максимума уже продано <code>{released}%</code> эмиссии.",
+  "lockedReleasing.wallet": "МЕШОК ПОШЁЛ В РЫНОК: <b>{label}</b> держал <code>{was}%</code> эмиссии, стало <code>{percent}%</code>. Продано <code>{released}%</code> эмиссии — это {tokens} монет на {value}. Крупный держатель разгружается.",
+  "lockedFloor.wallet": "МЕШОК ПОЧТИ РАЗОБРАН: у <b>{label}</b> осталось <code>{percent}%</code> эмиссии при пороге <code>{limit}%</code>."
 }

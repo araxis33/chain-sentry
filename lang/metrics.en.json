@@ -40,7 +40,9 @@
     "revenueBroken": "revenue",
     "revenueStale": "the revenue feed",
     "lockedReleasing": "the vesting overhang",
-    "lockedFloor": "the locked share"
+    "lockedFloor": "the locked share",
+    "lockedReleasing.wallet": "the large holder's bag",
+    "lockedFloor.wallet": "what is left of the bag"
   },
   "digestDay": "📅 On {day}: <code>{launches}</code> launches, {revenue} revenue",
   "digestBurn": "🔥 Burned <code>{burned}</code> tokens = <code>{burnedPercent}%</code> of supply",
@@ -70,5 +72,9 @@
   "digestLockedReleased": "🔓 <b>{label}</b>: <code>{percent}%</code> of supply locked ({tokens} tokens, {value}). <code>{released}%</code> of supply already released from the peak.",
   "lockedReleasing": "THE OVERHANG IS MOVING: <b>{label}</b> held <code>{was}%</code> of supply locked, now <code>{percent}%</code>. <code>{released}%</code> of supply released — {tokens} tokens, {value}. Vesting has started; it presses the price regardless of news.",
   "lockedFloor": "LOCKED BELOW THE LINE: <b>{label}</b> has <code>{percent}%</code> of supply locked against a floor of <code>{limit}%</code>.",
-  "digestFuelSplit": " — <code>{own}%</code> its own pool, <code>{others}%</code> other coins"
+  "digestFuelSplit": " — <code>{own}%</code> its own pool, <code>{others}%</code> other coins",
+  "digestLocked.wallet": "🐳 <b>{label}</b>: holds <code>{percent}%</code> of supply — {tokens} tokens, {value}. Unchanged since the last reading.",
+  "digestLockedReleased.wallet": "🐳 <b>{label}</b>: <code>{percent}%</code> of supply left ({tokens} tokens, {value}). <code>{released}%</code> of supply sold from the peak.",
+  "lockedReleasing.wallet": "THE BAG IS MOVING: <b>{label}</b> held <code>{was}%</code> of supply, now <code>{percent}%</code>. <code>{released}%</code> of supply sold — {tokens} tokens, {value}. A large holder is unloading.",
+  "lockedFloor.wallet": "THE BAG IS NEARLY GONE: <b>{label}</b> has <code>{percent}%</code> of supply left against a floor of <code>{limit}%</code>."
 }

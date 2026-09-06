@@ -976,19 +976,33 @@ def measure_locked(cfg, rpc, log):
         "holders": holders,
         "price": price,
         "valueUsd": locked * price,
+        "wording": watch.get("wording"),
     }
+
+
+def phrasing(text, key, wording):
+    """The wording variant a config asked for, falling back to the plain one.
+
+    The same measurement -- a share of supply that stops sitting still -- reads as two
+    different events. Tokens leaving a vesting contract are an unlock; the same tokens
+    leaving one person's wallet are somebody selling. Saying "vesting has started"
+    about a wallet would be wrong, so a config picks its vocabulary by name and the
+    lang file carries `<key>.<wording>` beside `<key>`.
+    """
+    return text.get("%s.%s" % (key, wording), text[key]) if wording else text[key]
 
 
 def digest_locked(now, text, peak):
     """One line: what is still locked, and how much of it has already gone."""
+    wording = now.get("wording")
     released = max(0.0, (now["percent"] if peak is None else peak) - now["percent"])
     # The percent goes in raw: the lang string wraps it together with its "%" sign,
     # the way offPeak does. Passing it through num() would nest one <code> in another.
     common = dict(label=esc(now["label"]), percent="%.2f" % now["percent"],
                   tokens=format(int(now["locked"]), ","), value=fmt_usd(now["valueUsd"]))
     if released <= 0:
-        return [row("info", text["digestLocked"].format(**common))]
-    return [row("down", text["digestLockedReleased"].format(
+        return [row("info", phrasing(text, "digestLocked", wording).format(**common))]
+    return [row("down", phrasing(text, "digestLockedReleased", wording).format(
         released="%.2f" % released, **common))]
 
 
@@ -1005,6 +1019,7 @@ def evaluate_locked(cfg, now, state, text):
     th = cfg["thresholds"]
     flags = dict(state.get("flags", {}))
     alerts = []
+    wording = now.get("wording")
 
     previous_peak = state.get("peakPercent")
     peak = now["percent"] if previous_peak is None else max(previous_peak, now["percent"])
@@ -1016,7 +1031,7 @@ def evaluate_locked(cfg, now, state, text):
     steps_now = int(released / step) if step > 0 else 0
     steps_seen = 0 if peak > (previous_peak or 0) else int(flags.get("releasedSteps", 0))
     if steps_now > steps_seen:
-        alerts.append(mark(text, "alarm") + " " + text["lockedReleasing"].format(
+        alerts.append(mark(text, "alarm") + " " + phrasing(text, "lockedReleasing", wording).format(
             label=esc(now["label"]), was="%.2f" % peak,
             percent="%.2f" % now["percent"], released="%.2f" % released,
             tokens=format(int(released / 100.0 * now["supply"]), ","),
@@ -1027,7 +1042,7 @@ def evaluate_locked(cfg, now, state, text):
     if floor is not None:
         below = now["percent"] < float(floor)
         if below and not flags.get("lockedBelowFloor", False):
-            alerts.append(mark(text, "alarm") + " " + text["lockedFloor"].format(
+            alerts.append(mark(text, "alarm") + " " + phrasing(text, "lockedFloor", wording).format(
                 label=esc(now["label"]), percent="%.2f" % now["percent"],
                 limit="%.2f" % float(floor)))
         flags["lockedBelowFloor"] = below
