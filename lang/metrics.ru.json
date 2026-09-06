@@ -45,7 +45,7 @@
   "digestDay": "📅 За {day}: запусков <code>{launches}</code>, выручка {revenue}",
   "digestBurn": "🔥 Сожжено <code>{burned}</code> токенов = <code>{burnedPercent}%</code> эмиссии",
   "digestChild": "🏆 Лучшая дочка: <b>{childSymbol}</b> <code>{child}</code>",
-  "digestFuel": "⚡ Топливо выкупа: <code>{eth} ETH</code> из локера за <code>{days} дн.</code>",
+  "digestFuel": "⚡ Топливо выкупа: <code>{eth} ETH</code> из локера за <code>{days} дн.</code>{split}",
   "digestMarket": "💲 Цена {price} · 💎 капа <code>{cap}</code> · 💦 ликв <code>{liquidity}</code>",
   "walletTotal": "💼 Всего {total} в <code>{kept}</code> монетах · спам отброшен <code>{spam}</code>",
   "walletLine": "<b>{symbol}</b> <code>{usd}</code> за сутки <code>{change}</code>",
@@ -69,5 +69,6 @@
   "digestLocked": "🔒 <b>{label}</b>: заперто <code>{percent}%</code> supply — {tokens} монет на {value}. С прошлого замера не сдвинулось.",
   "digestLockedReleased": "🔓 <b>{label}</b>: заперто <code>{percent}%</code> supply ({tokens} монет, {value}). От максимума уже роздано <code>{released}%</code> supply.",
   "lockedReleasing": "НАВЕС ПОШЁЛ В РЫНОК: у <b>{label}</b> было заперто <code>{was}%</code> supply, стало <code>{percent}%</code>. Роздано <code>{released}%</code> supply — это {tokens} монет на {value}. Разлочка началась, цену это давит независимо от новостей.",
-  "lockedFloor": "ЗАПЕРТО МЕНЬШЕ ПОРОГА: у <b>{label}</b> осталось <code>{percent}%</code> supply при пороге <code>{limit}%</code>."
+  "lockedFloor": "ЗАПЕРТО МЕНЬШЕ ПОРОГА: у <b>{label}</b> осталось <code>{percent}%</code> supply при пороге <code>{limit}%</code>.",
+  "digestFuelSplit": " — своё <code>{own}%</code>, с чужих монет <code>{others}%</code>"
 }

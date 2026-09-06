@@ -388,6 +388,8 @@ def measure(cfg, rpc, log, days_back):
         "launchesByDay": launches,
         "revenueByDay": {k: round(v, 2) for k, v in revenue.items()},
         "fuelByDay": {k: round(v, 4) for k, v in fuel.items()},
+        # Kept so the fuel window can price ETH into the same dollars as revenue.
+        "nativePrice": native_price,
         "burned": burned,
         "burnedPercent": (burned / supply * 100) if supply else 0,
         "childTokens": sorted(child_tokens),
@@ -1273,6 +1275,19 @@ def fuel_window(now, state, window):
     days = [d for d in sorted(history) if d != day_key(now["measuredAt"])][-window:]
     now["fuelWindow"] = round(sum(history.get(d, 0.0) for d in days), 3)
     now["fuelWindowDays"] = len(days)
+
+    # How much of that fuel the platform earned off OTHER people's coins, and how much
+    # it collected from its own pool. The question this answers is the only one that
+    # separates a launchpad from a carousel: a launchpad keeps earning when its own
+    # token stops moving, a carousel does not. Revenue counts other coins only, fuel
+    # counts everything that left the locker, so the gap between them is the self-fed
+    # part. Priced with the same native quote the revenue figures already use.
+    rev_history = dict(state.get("revenueByDay", {}))
+    rev_history.update(now.get("revenueByDay", {}))
+    fuel_usd = sum(history.get(d, 0.0) for d in days) * (now.get("nativePrice") or 0)
+    others_usd = sum(rev_history.get(d, 0.0) for d in days)
+    now["fuelOwnPercent"] = (round(max(0.0, min(100.0, (1 - others_usd / fuel_usd) * 100)), 1)
+                             if fuel_usd > 0 else None)
     return history, days
 
 
@@ -1533,7 +1548,11 @@ def digest(now, text, previous_price=None):
             childSymbol=esc(now.get("topChildSymbol") or "-"),
             child=fmt_usd(now.get("topChildMcap", 0)))),
         row("info", text["digestFuel"].format(
-            eth=("%.2f" % now.get("fuelWindow", 0)), days=now.get("fuelWindowDays", 0))),
+            eth=("%.2f" % now.get("fuelWindow", 0)), days=now.get("fuelWindowDays", 0),
+            split=("" if now.get("fuelOwnPercent") is None
+                   else text["digestFuelSplit"].format(
+                       own=now["fuelOwnPercent"],
+                       others=round(100 - now["fuelOwnPercent"], 1))))),
         row(sign_of(price_change), text["digestMarket"].format(
             price=num(fmt_usd(now["price"])), cap=fmt_usd(now["marketCap"]),
             liquidity=fmt_usd(now["liquidity"])), logo=now.get("imageUrl")),

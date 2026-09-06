@@ -45,7 +45,7 @@
   "digestDay": "📅 On {day}: <code>{launches}</code> launches, {revenue} revenue",
   "digestBurn": "🔥 Burned <code>{burned}</code> tokens = <code>{burnedPercent}%</code> of supply",
   "digestChild": "🏆 Biggest child coin: <b>{childSymbol}</b> <code>{child}</code>",
-  "digestFuel": "⚡ Buyback fuel: <code>{eth} ETH</code> out of the locker over <code>{days} days</code>",
+  "digestFuel": "⚡ Buyback fuel: <code>{eth} ETH</code> out of the locker over <code>{days} days</code>{split}",
   "digestMarket": "💲 Price {price} · 💎 cap <code>{cap}</code> · 💦 liq <code>{liquidity}</code>",
   "walletTotal": "💼 {total} across <code>{kept}</code> coins · spam ignored <code>{spam}</code>",
   "walletLine": "<b>{symbol}</b> <code>{usd}</code> 24h <code>{change}</code>",
@@ -69,5 +69,6 @@
   "digestLocked": "🔒 <b>{label}</b>: <code>{percent}%</code> of supply still locked — {tokens} tokens, {value}. Unchanged since the last reading.",
   "digestLockedReleased": "🔓 <b>{label}</b>: <code>{percent}%</code> of supply locked ({tokens} tokens, {value}). <code>{released}%</code> of supply already released from the peak.",
   "lockedReleasing": "THE OVERHANG IS MOVING: <b>{label}</b> held <code>{was}%</code> of supply locked, now <code>{percent}%</code>. <code>{released}%</code> of supply released — {tokens} tokens, {value}. Vesting has started; it presses the price regardless of news.",
-  "lockedFloor": "LOCKED BELOW THE LINE: <b>{label}</b> has <code>{percent}%</code> of supply locked against a floor of <code>{limit}%</code>."
+  "lockedFloor": "LOCKED BELOW THE LINE: <b>{label}</b> has <code>{percent}%</code> of supply locked against a floor of <code>{limit}%</code>.",
+  "digestFuelSplit": " — <code>{own}%</code> its own pool, <code>{others}%</code> other coins"
 }
