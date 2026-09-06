@@ -31,7 +31,7 @@
         "label": "STONKEX",
         "address": "0x5ab000ff9b9ffe0349ce5ffa5fd86f217c3680f5",
         "chain": "base",
-        "alertBelowUsd": 0.004
+        "alertBelowUsd": 0.010
       }
     ]
   },
