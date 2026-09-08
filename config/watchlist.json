@@ -31,7 +31,25 @@
         "label": "STONKEX",
         "address": "0x5ab000ff9b9ffe0349ce5ffa5fd86f217c3680f5",
         "chain": "base",
-        "alertBelowUsd": 0.010
+        "alertBelowUsd": 0.01
+      },
+      {
+        "label": "UPEG",
+        "address": "0x44b28991b167582f18ba0259e0173176ca125505",
+        "chain": "ethereum",
+        "alertBelowUsd": 120
+      },
+      {
+        "label": "SURPLUS",
+        "address": "0xc52aedec3374422d7510e294cfaa90799595cba3",
+        "chain": "base",
+        "alertBelowUsd": 3.5e-05
+      },
+      {
+        "label": "LFI",
+        "address": "0x3722264ab15a1dfce5a5af89e6547f7949a8aba3",
+        "chain": "base",
+        "alertBelowUsd": 6e-05
       }
     ]
   },
