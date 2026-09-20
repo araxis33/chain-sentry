@@ -142,7 +142,7 @@ in JSON sidesteps that entirely.
 from an RPC node and doing the arithmetic itself. It keeps both design rules above:
 alert on a change of state, and stay silent on the first run while it records a baseline.
 
-Six profiles, chosen per config with `"profile"`:
+Seven profiles, chosen per config with `"profile"`:
 
 | profile | what it measures | alerts on |
 |---|---|---|
@@ -152,6 +152,43 @@ Six profiles, chosen per config with `"profile"`:
 | `lp` | concentrated liquidity positions: whether the price is still inside the range, how far the nearest edge is, what the position now consists of, fees accrued | leaving the range, coming back into it, and coming within `edgePercent` of an edge |
 | `revenue` | what a protocol earns per day, from DefiLlama, averaged over complete days only | the average falling under `warnBelowUsd` or `alarmBelowUsd`, and the source going quiet |
 | `locked` | the share of a supply still sitting where it cannot be sold — a vesting contract, or the token's own contract | that share falling by `dropPercentPoints`, or dropping under `floorPercent` |
+| `freshness` | how long ago a published JSON file was last rebuilt, read from a timestamp the file carries itself | the file ageing past `staleAfterHours`, or ceasing to be readable at all |
+
+### The `freshness` profile
+
+A scheduled job that stops running does not announce itself. The page it feeds keeps
+serving the last good file, so the site opens, looks healthy, and shows yesterday's
+numbers. On 2026-09-20 the Aerodrome radar served a 20-hour-old snapshot after three
+consecutive build failures, and it was found by accident rather than by anything
+watching for it.
+
+The profile takes the timestamp the file already publishes — no extra endpoint, no
+agent on the server — and compares it to now:
+
+```json
+"watch": {
+  "url": "https://aero.deftools.xyz/data/snapshot.json",
+  "timestampField": "generatedAt",
+  "countField": "poolCount",
+  "countLabel": "pools"
+},
+"thresholds": { "staleAfterHours": 6 }
+```
+
+`timestampField` accepts a dotted path and reads ISO 8601, epoch seconds or epoch
+milliseconds. `countField` is optional: a number worth carrying into the digest beside
+the age, so a file that is fresh but suddenly half-empty is visible too.
+
+Two failures are tracked separately, because they call for different answers. **Stale**
+means the site is up and the job behind it is not. **Unreadable** means the file cannot
+be fetched or carries no usable timestamp at all. One flag for both would announce a
+recovery the moment a dead site started serving an old file again.
+
+One deliberate choice inside: an unreachable URL is returned as a *measurement*, not
+raised as an error. A raised error lands the config in the failed list, and that note
+only rides along with a message something else already caused — so on an `--alerts-only`
+run a site that was entirely down would have produced silence, which is the one outcome
+this profile exists to prevent.
 
 ### The `locked` profile
 

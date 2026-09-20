@@ -1,0 +1,23 @@
+{
+  "name": "Радар Aerodrome — свежесть снимка",
+  "profile": "freshness",
+  "language": "ru",
+  "stateFile": "state/aero-snapshot-state.json",
+
+  "watch": {
+    "label": "Радар Aerodrome",
+    "url": "https://aero.deftools.xyz/data/snapshot.json",
+    "timestampField": "generatedAt",
+    "countField": "poolCount",
+    "countLabel": "пулов"
+  },
+
+  "thresholds": {
+    "staleAfterHours": 6
+  },
+
+  "notify": {
+    "tokenEnv": "TELEGRAM_BOT_TOKEN",
+    "chatEnv": "TELEGRAM_CHAT_ID"
+  }
+}

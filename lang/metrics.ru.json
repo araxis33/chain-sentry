@@ -42,7 +42,9 @@
     "lockedReleasing": "навес на вестинге",
     "lockedFloor": "запертая доля",
     "lockedReleasing.wallet": "мешок крупного держателя",
-    "lockedFloor.wallet": "остаток мешка"
+    "lockedFloor.wallet": "остаток мешка",
+    "freshnessStale": "обновление снимка",
+    "freshnessBroken": "чтение файла"
   },
   "digestDay": "📅 За {day}: запусков <code>{launches}</code>, выручка {revenue}",
   "digestBurn": "🔥 Сожжено <code>{burned}</code> токенов = <code>{burnedPercent}%</code> эмиссии",
@@ -76,5 +78,10 @@
   "digestLocked.wallet": "🐳 <b>{label}</b>: держит <code>{percent}%</code> эмиссии — {tokens} монет на {value}. С прошлого замера не сдвинулся.",
   "digestLockedReleased.wallet": "🐳 <b>{label}</b>: осталось <code>{percent}%</code> эмиссии ({tokens} монет, {value}). От максимума уже продано <code>{released}%</code> эмиссии.",
   "lockedReleasing.wallet": "МЕШОК ПОШЁЛ В РЫНОК: <b>{label}</b> держал <code>{was}%</code> эмиссии, стало <code>{percent}%</code>. Продано <code>{released}%</code> эмиссии — это {tokens} монет на {value}. Крупный держатель разгружается.",
-  "lockedFloor.wallet": "МЕШОК ПОЧТИ РАЗОБРАН: у <b>{label}</b> осталось <code>{percent}%</code> эмиссии при пороге <code>{limit}%</code>."
+  "lockedFloor.wallet": "МЕШОК ПОЧТИ РАЗОБРАН: у <b>{label}</b> осталось <code>{percent}%</code> эмиссии при пороге <code>{limit}%</code>.",
+  "digestFreshness": "🛰 <b>{label}</b>: снимок свежий, обновлён <code>{hours} ч {minutes} мин</code> назад{extra}",
+  "digestFreshnessBroken": "ФАЙЛ НЕ ЧИТАЕТСЯ: <b>{label}</b> — {error}",
+  "freshnessCount": " · {count} {what}",
+  "freshnessStale": "ДАННЫЕ ЗАСТЫЛИ: <b>{label}</b> не обновлялся <code>{hours} ч {minutes} мин</code> при пороге <code>{limit} ч</code>. Последняя сборка {published} UTC. Сайт при этом открывается и выглядит живым — цифры на нём старые.",
+  "freshnessBroken": "ФАЙЛ НЕ ЧИТАЕТСЯ: <b>{label}</b> не отдаёт годный ответ — {error}. Это хуже застывших данных: странице нечем себя заполнить."
 }

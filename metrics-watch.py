@@ -18,6 +18,8 @@ Profiles, chosen per config with "profile":
     revenue    what a protocol earns per day (DefiLlama), judged on a multi-day average
     lp         concentrated liquidity positions: is the price still inside the range,
                how close to an edge, what the position is made of, fees accrued
+    freshness  a published file the site serves: is the job behind it still running,
+               or has the page been showing the same numbers for a day
 
 Usage:
     python metrics-watch.py --config config/stonkex.json --config config/watchlist.json
@@ -923,6 +925,170 @@ def evaluate_revenue(cfg, now, state, text):
     return alerts, flags
 
 
+# ------------------------------------------------------------------- freshness
+
+def dig(doc, path):
+    """Read a dotted path out of parsed JSON. Missing link -> None, never raises."""
+    node = doc
+    for part in str(path).split("."):
+        if isinstance(node, dict) and part in node:
+            node = node[part]
+        else:
+            return None
+    return node
+
+
+def parse_stamp(raw):
+    """A published timestamp as epoch seconds, or None if it is not one.
+
+    Three shapes turn up in the wild and all three are accepted: an ISO 8601
+    string, epoch seconds, and epoch milliseconds. Telling seconds from
+    milliseconds by magnitude is safe for any date this side of 1973.
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, (int, float)):
+        value = float(raw)
+        return value / 1000.0 if value > 1e11 else value
+    try:
+        cleaned = str(raw).strip().replace("Z", "+00:00")
+        parsed = dt.datetime.fromisoformat(cleaned)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return parsed.timestamp()
+
+
+def measure_freshness(cfg, log):
+    """Profile 'freshness': is a published file still being refreshed?
+
+    A scheduled job that stops running does not announce itself. The page it
+    feeds keeps serving the last good file, so the site looks perfectly healthy
+    while the numbers on it are yesterday's. On 2026-09-20 the Aerodrome radar
+    served a 20-hour-old snapshot for exactly this reason -- three failed builds
+    in a row -- and it was found by accident rather than by anything watching.
+
+    A transport failure is a MEASUREMENT here, not an error. Raising would put
+    the config in main()'s failed list, and that note is only attached to a
+    message something else already caused -- so on an --alerts-only run a site
+    that is entirely down would produce silence, which is the single outcome
+    this profile exists to prevent.
+    """
+    w = cfg["watch"]
+    label = w.get("label") or w["url"]
+    field = w.get("timestampField", "generatedAt")
+    now_ts = time.time()
+    out = {
+        "measuredAt": int(now_ts),
+        "label": label,
+        "url": w["url"],
+        "reachable": False,
+        "error": None,
+        "ageSeconds": None,
+        "stamp": None,
+        "count": None,
+        "countLabel": w.get("countLabel"),
+    }
+
+    try:
+        doc = http_json(w["url"], timeout=int(w.get("timeout", 30)), retries=2)
+    except Exception as exc:  # noqa: BLE001 - unreachable is a finding, not a crash
+        out["error"] = str(exc)[:180]
+        log("freshness: %s UNREACHABLE (%s)" % (label, out["error"]))
+        return out
+
+    stamp = parse_stamp(dig(doc, field))
+    if stamp is None:
+        out["error"] = "field '%s' holds no usable timestamp" % field
+        log("freshness: %s served a file with no usable '%s'" % (label, field))
+        return out
+
+    out["reachable"] = True
+    out["stamp"] = stamp
+    # Clamped at zero: a publisher whose clock runs ahead of ours would otherwise
+    # report a negative age and read as fresh forever.
+    out["ageSeconds"] = max(0.0, now_ts - stamp)
+    if w.get("countField"):
+        value = dig(doc, w["countField"])
+        if isinstance(value, (int, float)):
+            out["count"] = value
+
+    log("freshness: %s last published %s, %.1f h ago" % (
+        label, dt.datetime.fromtimestamp(stamp, dt.timezone.utc).strftime("%Y-%m-%d %H:%MZ"),
+        out["ageSeconds"] / 3600.0))
+    return out
+
+
+def _age_parts(seconds):
+    total = int(seconds or 0)
+    return total // 3600, (total % 3600) // 60
+
+
+def _short_error(message):
+    """The reason, short enough to read in a phone notification.
+
+    http_json reports every attempt it made and then the curl fallback's own
+    failure on top, which is right in a log and unreadable in an alert. The full
+    text stays in the log; this keeps the part that names the cause.
+    """
+    text = re.sub(r"^request failed after \d+ tries: ", "", str(message or "").strip())
+    text = re.split(r"\s*\(curl fallback:", text)[0].strip()
+    return text[:110] if text else "no answer"
+
+
+def digest_freshness(now, text):
+    if not now["reachable"]:
+        return [row("warn", text["digestFreshnessBroken"].format(
+            label=esc(now["label"]), error=esc(_short_error(now["error"]))))]
+    hours, minutes = _age_parts(now["ageSeconds"])
+    extra = ""
+    if now["count"] is not None:
+        extra = text["freshnessCount"].format(
+            count=num(format(int(now["count"]), ",")),
+            what=esc(now["countLabel"] or ""))
+    return [row("info", text["digestFreshness"].format(
+        label=esc(now["label"]), hours=hours, minutes=minutes, extra=extra))]
+
+
+def evaluate_freshness(cfg, now, state, text):
+    """Two separate failures, because they need different answers from him.
+
+    'Stale' means the publisher is alive and the job behind it is not. 'Broken'
+    means the file itself cannot be read at all. Folding them into one flag would
+    announce a recovery the moment a dead site started serving an old file again.
+    """
+    limit_hours = float(cfg["thresholds"].get("staleAfterHours", 6))
+    flags = dict(state.get("flags", {}))
+    alerts = []
+
+    def flip(name, active, message, kind="alarm"):
+        was = flags.get(name, False)
+        flags[name] = active
+        if active and not was:
+            alerts.append(mark(text, kind) + " " + message)
+        elif was and not active and cfg.get("alertOnRecovery", True):
+            alerts.append(mark(text, "up") + " "
+                          + text["recovered"].format(what=text["names"][name]))
+
+    flip("freshnessBroken", not now["reachable"],
+         text["freshnessBroken"].format(label=esc(now["label"]),
+                                        error=esc(_short_error(now["error"]))))
+
+    # Only judged when the file was actually read. An unreachable site has no age,
+    # and guessing one would either cry stale twice or clear the stale flag while
+    # nothing is known.
+    if now["reachable"]:
+        hours, minutes = _age_parts(now["ageSeconds"])
+        flip("freshnessStale", now["ageSeconds"] > limit_hours * 3600,
+             text["freshnessStale"].format(
+                 label=esc(now["label"]), hours=hours, minutes=minutes,
+                 limit="%g" % limit_hours,
+                 published=dt.datetime.fromtimestamp(
+                     now["stamp"], dt.timezone.utc).strftime("%d.%m %H:%M")))
+    return alerts, flags
+
+
 # --------------------------------------------------------------- locked supply
 
 SEL_TOTAL_SUPPLY = "0x18160ddd"
@@ -1774,6 +1940,12 @@ def process_one(cfg_path, log):
         lines = digest_lp(now, text)
         alerts, flags = ([], {}) if first_run else evaluate_lp(cfg, now, state, text)
         state_out = {"baseline": True, "measuredAt": now["measuredAt"], "flags": flags}
+    elif profile == "freshness":
+        now = measure_freshness(cfg, log)
+        lines = digest_freshness(now, text)
+        alerts, flags = ([], {}) if first_run else evaluate_freshness(cfg, now, state, text)
+        state_out = {"baseline": True, "measuredAt": now["measuredAt"],
+                     "lastStamp": now["stamp"], "flags": flags}
     elif profile == "wallet":
         now = measure_wallet(cfg, log, state.get("knownTokens"),
                              scanned_to=state.get("scannedToBlock", 0),

@@ -42,7 +42,9 @@
     "lockedReleasing": "the vesting overhang",
     "lockedFloor": "the locked share",
     "lockedReleasing.wallet": "the large holder's bag",
-    "lockedFloor.wallet": "what is left of the bag"
+    "lockedFloor.wallet": "what is left of the bag",
+    "freshnessStale": "snapshot freshness",
+    "freshnessBroken": "reading the file"
   },
   "digestDay": "📅 On {day}: <code>{launches}</code> launches, {revenue} revenue",
   "digestBurn": "🔥 Burned <code>{burned}</code> tokens = <code>{burnedPercent}%</code> of supply",
@@ -76,5 +78,10 @@
   "digestLocked.wallet": "🐳 <b>{label}</b>: holds <code>{percent}%</code> of supply — {tokens} tokens, {value}. Unchanged since the last reading.",
   "digestLockedReleased.wallet": "🐳 <b>{label}</b>: <code>{percent}%</code> of supply left ({tokens} tokens, {value}). <code>{released}%</code> of supply sold from the peak.",
   "lockedReleasing.wallet": "THE BAG IS MOVING: <b>{label}</b> held <code>{was}%</code> of supply, now <code>{percent}%</code>. <code>{released}%</code> of supply sold — {tokens} tokens, {value}. A large holder is unloading.",
-  "lockedFloor.wallet": "THE BAG IS NEARLY GONE: <b>{label}</b> has <code>{percent}%</code> of supply left against a floor of <code>{limit}%</code>."
+  "lockedFloor.wallet": "THE BAG IS NEARLY GONE: <b>{label}</b> has <code>{percent}%</code> of supply left against a floor of <code>{limit}%</code>.",
+  "digestFreshness": "🛰 <b>{label}</b>: snapshot is current, published <code>{hours}h {minutes}m</code> ago{extra}",
+  "digestFreshnessBroken": "FILE UNREADABLE: <b>{label}</b> - {error}",
+  "freshnessCount": " · {count} {what}",
+  "freshnessStale": "DATA HAS FROZEN: <b>{label}</b> has not refreshed for <code>{hours}h {minutes}m</code> against a <code>{limit}h</code> limit. Last build {published} UTC. The site still opens and looks alive - the numbers on it are old.",
+  "freshnessBroken": "FILE UNREADABLE: <b>{label}</b> returns nothing usable - {error}. Worse than stale data: the page has nothing to fill itself with."
 }
