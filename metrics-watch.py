@@ -1312,6 +1312,81 @@ def tick_price(tick, dec0, dec1):
     return 1.0001 ** tick * 10 ** (dec0 - dec1)
 
 
+_KECCAK_RC = [
+    0x0000000000000001, 0x0000000000008082, 0x800000000000808A, 0x8000000080008000,
+    0x000000000000808B, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009,
+    0x000000000000008A, 0x0000000000000088, 0x0000000080008009, 0x000000008000000A,
+    0x000000008000808B, 0x800000000000008B, 0x8000000000008089, 0x8000000000008003,
+    0x8000000000008002, 0x8000000000000080, 0x000000000000800A, 0x800000008000000A,
+    0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008]
+_KECCAK_ROT = [[0, 36, 3, 41, 18], [1, 44, 10, 45, 2], [62, 6, 43, 15, 61],
+               [28, 55, 25, 21, 56], [27, 20, 39, 8, 14]]
+_M64 = (1 << 64) - 1
+
+
+def keccak256(data):
+    """Ethereum's keccak-256. hashlib only has SHA3, which pads differently."""
+    rol = lambda x, n: ((x << n % 64) | (x >> (64 - n % 64))) & _M64 if n % 64 else x  # noqa: E731
+    padded = bytearray(data) + b"\x01"
+    while len(padded) % 136:
+        padded += b"\x00"
+    padded[-1] ^= 0x80
+    a = [[0] * 5 for _ in range(5)]
+    for off in range(0, len(padded), 136):
+        for i in range(17):
+            a[i % 5][i // 5] ^= int.from_bytes(padded[off + i * 8:off + i * 8 + 8], "little")
+        for rnd in range(24):
+            c = [a[x][0] ^ a[x][1] ^ a[x][2] ^ a[x][3] ^ a[x][4] for x in range(5)]
+            d = [c[(x - 1) % 5] ^ rol(c[(x + 1) % 5], 1) for x in range(5)]
+            b = [[0] * 5 for _ in range(5)]
+            for x in range(5):
+                for y in range(5):
+                    b[y][(2 * x + 3 * y) % 5] = rol(a[x][y] ^ d[x], _KECCAK_ROT[x][y])
+            for x in range(5):
+                for y in range(5):
+                    a[x][y] = b[x][y] ^ ((~b[(x + 1) % 5][y]) & _M64 & b[(x + 2) % 5][y])
+            a[0][0] ^= _KECCAK_RC[rnd]
+    return b"".join(a[i % 5][i // 5].to_bytes(8, "little") for i in range(4))
+
+
+# ERC-6909 Transfer(address caller, address indexed sender, address indexed receiver,
+# uint256 indexed id, uint256 amount) -- the hook's receipt for LP shares.
+TOPIC_TRANSFER_6909 = "0x1b3d7edb2e9c0b0e7c525b20aaaef0f5940d2ed71663c7d39266ecafac728859"
+
+
+def discover_lp_positions(rpc, owner, log):
+    """Every range the owner holds shares in, on any hook, found from the chain.
+
+    A hand-written list of range ids went blind twice: moving liquidity to a new range
+    or a new pool mints a new id, and the old one reads $0.00 forever. So each run asks
+    the chain which ids were ever sent to the owner and keeps the ones still held.
+    """
+    query = {"fromBlock": "0x0", "toBlock": "latest",
+             "topics": [TOPIC_TRANSFER_6909, None, pad_addr(owner)]}
+    seen, found = set(), []
+    for entry in rpc.call("eth_getLogs", [query]):
+        hook = str(entry["address"]).lower()
+        range_id = entry["topics"][3].lower().replace("0x", "")
+        if (hook, range_id) in seen:
+            continue
+        seen.add((hook, range_id))
+        try:
+            shares = uint_of(words(call_view(
+                rpc, hook, SEL_BALANCE_OF + pad_addr(owner)[2:] + range_id), 1)[0])
+            if not shares:
+                continue
+            key = words(call_view(rpc, hook, SEL_RANGE_KEY + range_id), 8)
+        except Exception as exc:  # noqa: BLE001 - not every 6909 contract is a Fables hook
+            log("lp discovery: %s skipped (%s)" % (hook[:10], str(exc)[:60]))
+            continue
+        # poolId = keccak256(abi.encode(PoolKey)), and the PoolKey is the first five words.
+        pool_id = keccak256(bytes.fromhex("".join(w.replace("0x", "").rjust(64, "0")
+                                                  for w in key[:5]))).hex()
+        found.append({"hook": hook, "rangeId": range_id, "poolId": pool_id})
+    log("lp discovery: %d position(s) held out of %d ever received" % (len(found), len(seen)))
+    return found
+
+
 def measure_lp(cfg, rpc, log):
     """Profile 'lp': concentrated liquidity positions on a Uniswap v4 hook.
 
@@ -1324,7 +1399,13 @@ def measure_lp(cfg, rpc, log):
     state_view = watch["stateView"]
     cache = {}
     rows = []
-    for entry in watch["positions"]:
+    positions = watch.get("positions", [])
+    if watch.get("discover", True):
+        try:
+            positions = discover_lp_positions(rpc, owner, log)
+        except Exception as exc:  # noqa: BLE001 - fall back to the configured list
+            log("lp discovery failed (%s), using the configured list" % str(exc)[:100])
+    for entry in positions:
         hook = entry["hook"].lower()
         range_id = entry["rangeId"].lower().replace("0x", "")
         pool_id = entry["poolId"].lower().replace("0x", "")
