@@ -16,10 +16,6 @@
         "address": "0x56910d4409f3a0c78c64dd8d0545ff0705389870"
       },
       {
-        "label": "PROLOGUE",
-        "address": "0xb9972ca7188e511174947e3936a5315ac7073277"
-      },
-      {
         "label": "AI",
         "address": "0x2e8c31162b855a2ffa90f6f8634643ad6f111e18"
       },
@@ -32,12 +28,6 @@
         "address": "0x5ab000ff9b9ffe0349ce5ffa5fd86f217c3680f5",
         "chain": "base",
         "alertBelowUsd": 0.01
-      },
-      {
-        "label": "UPEG",
-        "address": "0x44b28991b167582f18ba0259e0173176ca125505",
-        "chain": "ethereum",
-        "alertBelowUsd": 120
       },
       {
         "label": "SURPLUS",
