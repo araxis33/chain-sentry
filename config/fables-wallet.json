@@ -1,0 +1,32 @@
+{
+  "name": "Кошелёк Fables (Robinhood Chain)",
+  "profile": "wallet",
+  "language": "ru",
+  "stateFile": "state/fables-wallet-state.json",
+
+  "watch": {
+    "address": "0x0000000000000000000000000000000000000000",
+    "chain": "robinhood",
+    "minUsd": 1,
+    "rpc": ["https://rpc.mainnet.chain.robinhood.com"],
+
+    "tokens": [
+      { "symbol": "PONS",  "address": "0x39dbed3a2bd333467115de45665cc57f813c4571", "decimals": 18 },
+      { "symbol": "Index", "address": "0x56910d4409f3a0c78c64dd8d0545ff0705389870", "decimals": 18 },
+      { "symbol": "USDG",  "address": "0x5fc5360d0400a0fd4f2af552add042d716f1d168", "decimals": 6 },
+      { "symbol": "AI",      "address": "0x2e8c31162b855a2ffa90f6f8634643ad6f111e18", "decimals": 18 },
+      { "symbol": "CASHCAT", "address": "0x020bfc650a365f8bb26819deaabf3e21291018b4", "decimals": 18 }
+    ]
+  },
+
+  "thresholds": {
+    "totalMovePercent": 15,
+    "tokenMovePercent": 20,
+    "liquidityBelowUsd": 100000
+  },
+
+  "notify": {
+    "tokenEnv": "TELEGRAM_BOT_TOKEN",
+    "chatEnv": "TELEGRAM_CHAT_ID"
+  }
+}
