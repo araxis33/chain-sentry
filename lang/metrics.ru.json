@@ -53,6 +53,7 @@
   "digestMarket": "💲 Цена {price} · 💎 капа <code>{cap}</code> · 💦 ликв <code>{liquidity}</code>",
   "walletTotal": "💼 Всего {total} в <code>{kept}</code> монетах · спам отброшен <code>{spam}</code>",
   "walletLine": "<b>{symbol}</b> <code>{usd}</code> за сутки <code>{change}</code>",
+  "walletLineThin": "<b>{symbol}</b> цена из тонкого пула (<code>{liq}</code>), в сумму не входит",
   "tokenLine": "<b>{label}</b> <code>{price}</code> за сутки <code>{change}</code> · капа <code>{cap}</code> · ликв <code>{liq}</code>",
   "tokenMissing": "<b>{label}</b> — рыночных данных нет",
   "tokenBelow": "ЦЕНА НА ТВОЁМ УРОВНЕ: <b>{label}</b> опустился до <code>{price}</code> при уровне <code>{limit}</code> — то самое, чего ждал.",

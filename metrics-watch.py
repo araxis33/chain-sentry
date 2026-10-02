@@ -130,12 +130,14 @@ class Rpc:
         while start <= to_block:
             end = min(start + step - 1, to_block)
             try:
-                chunk = self.call("eth_getLogs", [{
-                    "address": address,
+                query = {
                     "topics": topics or [topic],
                     "fromBlock": hex(start),
                     "toBlock": hex(end),
-                }])
+                }
+                if address:
+                    query["address"] = address
+                chunk = self.call("eth_getLogs", [query])
             except RuntimeError:
                 if step <= 1000:
                     raise
@@ -635,6 +637,20 @@ def measure_wallet(cfg, log, known=None, scanned_to=0, discovered=None):
             % (len(unread), ", ".join(unread)))
 
     real.sort(key=lambda h: -h["usd"])
+    # A price read from a pool too thin to sell into is not a price. 2026-10-02: one pool
+    # holding $22.80 priced 6,000 airdropped VRAX at $385, and a $20K pool priced a
+    # Moonwell receipt at $4,333 a share, which turned a $650 wallet into "$186,527".
+    # Such holdings stay in the list (the thin/moved alerts still need them) but are
+    # left out of the total, and the log says which.
+    floor = (cfg.get("thresholds") or {}).get("liquidityBelowUsd") or 0
+    counted = [h for h in real if (h.get("liquidity") or 0) >= floor]
+    left_out = [h for h in real if h not in counted]
+    for h in left_out:
+        h["counted"] = False
+    if left_out:
+        log("left out of the total, pool too thin to trust the price: %s" % ", ".join(
+            "%s (pool %s, valued %s)" % (h["symbol"], fmt_usd(h.get("liquidity") or 0),
+                                          fmt_usd(h["usd"])) for h in left_out))
     return {
         "measuredAt": int(time.time()),
         "fromCache": from_cache,
@@ -645,7 +661,7 @@ def measure_wallet(cfg, log, known=None, scanned_to=0, discovered=None):
         "partial": bool(unread),
         "rebased": rebased,
         "holdings": real,
-        "totalUsd": sum(h["usd"] for h in real),
+        "totalUsd": sum(h["usd"] for h in counted),
         "tokenCount": len(held),
         "spamCount": max(0, len(held) - len(real) - empty),
     }
@@ -657,6 +673,12 @@ def digest_wallet(now, text, previous_total=None):
         total=num(fmt_usd(now["totalUsd"])), kept=len(now["holdings"]),
         spam=now["spamCount"]))]
     for holding in now["holdings"][:8]:
+        if holding.get("counted") is False:
+            # Priced from a pool too thin to sell into: showing the number would be a lie.
+            lines.append(row(sign_of(None), text["walletLineThin"].format(
+                symbol=esc(holding["symbol"]), liq=fmt_usd(holding.get("liquidity") or 0)),
+                logo=holding.get("imageUrl")))
+            continue
         change = holding.get("change24")
         lines.append(row(sign_of(change), text["walletLine"].format(
             symbol=esc(holding["symbol"]), usd=fmt_usd(holding["usd"]),
@@ -1354,22 +1376,42 @@ def keccak256(data):
 TOPIC_TRANSFER_6909 = "0x1b3d7edb2e9c0b0e7c525b20aaaef0f5940d2ed71663c7d39266ecafac728859"
 
 
-def discover_lp_positions(rpc, owner, log):
+def discover_lp_positions(rpc, owner, log, cache_file=None):
     """Every range the owner holds shares in, on any hook, found from the chain.
 
     A hand-written list of range ids went blind twice: moving liquidity to a new range
     or a new pool mints a new id, and the old one reads $0.00 forever. So each run asks
     the chain which ids were ever sent to the owner and keeps the ones still held.
     """
-    query = {"fromBlock": "0x0", "toBlock": "latest",
-             "topics": [TOPIC_TRANSFER_6909, None, pad_addr(owner)]}
-    seen, found = set(), []
-    for entry in rpc.call("eth_getLogs", [query]):
-        hook = str(entry["address"]).lower()
-        range_id = entry["topics"][3].lower().replace("0x", "")
-        if (hook, range_id) in seen:
-            continue
-        seen.add((hook, range_id))
+    topics = [TOPIC_TRANSFER_6909, None, pad_addr(owner)]
+    # The public node refuses eth_getLogs spans over 30,000 blocks (checked 2026-10-02) and
+    # the history is ~78M blocks, so asking once from block 0 stopped working: the run fell
+    # back to the hand-written list and quietly lost the PONS/USDG position. Ranges ever
+    # received are now remembered in a small file next to the state, and each run walks
+    # only the blocks since the previous one.
+    cached = {}
+    if cache_file and os.path.isfile(cache_file):
+        try:
+            with open(cache_file, "r", encoding="utf-8") as handle:
+                cached = json.load(handle)
+        except (OSError, ValueError):
+            cached = {}
+    seen = {(r["hook"], r["rangeId"]) for r in cached.get("ranges", [])}
+    scanned_to = int(cached.get("scannedTo") or 0)
+    latest = int(rpc.call("eth_blockNumber", []), 16)
+    if scanned_to:
+        start = scanned_to + 1
+    else:
+        start = max(0, latest - 3000000)
+        log("lp discovery: no memory of earlier ranges yet, looking back %d blocks only" % (latest - start))
+    for entry in rpc.logs(None, None, start, latest, step=29000, topics=topics):
+        seen.add((str(entry["address"]).lower(), entry["topics"][3].lower().replace("0x", "")))
+    if cache_file:
+        with open(cache_file, "w", encoding="utf-8") as handle:
+            json.dump({"scannedTo": latest,
+                       "ranges": [{"hook": h, "rangeId": r} for h, r in sorted(seen)]}, handle)
+    found = []
+    for hook, range_id in sorted(seen):
         try:
             shares = uint_of(words(call_view(
                 rpc, hook, SEL_BALANCE_OF + pad_addr(owner)[2:] + range_id), 1)[0])
@@ -1402,7 +1444,8 @@ def measure_lp(cfg, rpc, log):
     positions = watch.get("positions", [])
     if watch.get("discover", True):
         try:
-            positions = discover_lp_positions(rpc, owner, log)
+            positions = discover_lp_positions(rpc, owner, log, os.path.join(
+                BASE_DIR, str(cfg["stateFile"]).replace(".json", "-ranges.json")) if cfg.get("stateFile") else None)
         except Exception as exc:  # noqa: BLE001 - fall back to the configured list
             log("lp discovery failed (%s), using the configured list" % str(exc)[:100])
     for entry in positions:
