@@ -192,7 +192,7 @@ def sint_of(word):
 
 # --------------------------------------------------------------- prices
 
-def dexscreener_tokens(addresses, batch_size=5, chain=None):
+def dexscreener_tokens(addresses, batch_size=5, chain=None, failed=None):
     """Best pair per token address, keyed by lowercase address.
 
     The endpoint caps how many PAIRS it returns per call, not how many tokens, so a
@@ -207,12 +207,30 @@ def dexscreener_tokens(addresses, batch_size=5, chain=None):
     """
     best = {}
     addresses = [a for a in addresses if a]
-    for i in range(0, len(addresses), batch_size):
-        batch = ",".join(addresses[i:i + batch_size])
-        try:
-            data = http_json("https://api.dexscreener.com/latest/dex/tokens/" + batch, retries=2)
-        except Exception:  # noqa: BLE001 - price data is best effort
-            continue
+    batches = [addresses[i:i + batch_size] for i in range(0, len(addresses), batch_size)]
+    answered = []
+    # A batch that did not answer used to be skipped in silence, and its tokens then
+    # looked unpriced, worth nothing, and fell out of the wallet total: 2026-10-02,
+    # with the connection dropping, 654 AERO ($542) vanished from the digest. A
+    # refused batch now gets two more tries after a pause, and whatever still has no
+    # answer is handed back through `failed` so the caller can say so.
+    for attempt in range(3):
+        pending = []
+        for batch in batches:
+            try:
+                answered.append(http_json(
+                    "https://api.dexscreener.com/latest/dex/tokens/" + ",".join(batch), retries=2))
+            except Exception:  # noqa: BLE001 - retried below, then reported
+                pending.append(batch)
+        batches = pending
+        if not batches:
+            break
+        if attempt < 2:
+            time.sleep(3 * (attempt + 1))
+    if failed is not None:
+        for batch in batches:
+            failed.extend(a.lower() for a in batch)
+    for data in answered:
         by_token = {}
         for pair in (data.get("pairs") or []):
             if chain and str(pair.get("chainId", "")).lower() != chain.lower():
@@ -570,7 +588,14 @@ def measure_wallet(cfg, log, known=None, scanned_to=0, discovered=None):
             "placeholder": bool(item.get("placeholder")),
         })
 
-    prices = dexscreener_tokens([h["address"] for h in held], chain=w.get("chain"))
+    no_answer = []
+    prices = dexscreener_tokens([h["address"] for h in held], chain=w.get("chain"), failed=no_answer)
+    # "Nobody could price it" is not "nobody trades it". Such a token is counted and
+    # named instead of being dropped as worthless, the measurement is marked partial
+    # so no "wallet down 65%" alert fires on it, and a token the wallet was known to
+    # hold stays remembered until a run can price it again.
+    no_answer = set(no_answer)
+    unpriced = [h for h in held if h["address"] in no_answer]
     for holding in held:
         info = prices.get(holding["address"], {})
         holding["price"] = info.get("price", 0)
@@ -651,19 +676,27 @@ def measure_wallet(cfg, log, known=None, scanned_to=0, discovered=None):
         log("left out of the total, pool too thin to trust the price: %s" % ", ".join(
             "%s (pool %s, valued %s)" % (h["symbol"], fmt_usd(h.get("liquidity") or 0),
                                           fmt_usd(h["usd"])) for h in left_out))
+    remembered = [h for h in unpriced if h["address"] in merged]
+    if unpriced:
+        log("price source did not answer for %d token(s), not in the total: %s"
+            % (len(unpriced), ", ".join(h["symbol"] for h in (remembered or unpriced)[:8])))
+    kept = real + [h for h in remembered if h not in real]
     return {
         "measuredAt": int(time.time()),
         "fromCache": from_cache,
         "knownTokens": [{"symbol": h["symbol"], "address": h["address"],
-                         "decimals": h.get("decimals", 18)} for h in real],
+                         "decimals": h.get("decimals", 18)} for h in kept],
         "discoveredTokens": discovered,
         "scannedToBlock": scanned_to,
-        "partial": bool(unread),
+        "partial": bool(unread) or bool(unpriced),
+        "unpriced": len(unpriced),
+        "unpricedKnown": [h["symbol"] for h in remembered],
         "rebased": rebased,
         "holdings": real,
         "totalUsd": sum(h["usd"] for h in counted),
         "tokenCount": len(held),
-        "spamCount": max(0, len(held) - len(real) - empty),
+        # Unpriced is not spam: those are named on their own line instead.
+        "spamCount": max(0, len(held) - len(real) - empty - len([h for h in unpriced if h not in real])),
     }
 
 
@@ -683,6 +716,11 @@ def digest_wallet(now, text, previous_total=None):
         lines.append(row(sign_of(change), text["walletLine"].format(
             symbol=esc(holding["symbol"]), usd=fmt_usd(holding["usd"]),
             change=fmt_change(change)), logo=holding.get("imageUrl")))
+    if now.get("unpriced"):
+        # Said out loud, so a total that is short reads as short and not as a loss.
+        known = now.get("unpricedKnown") or []
+        lines.append(row(sign_of(None), text["walletUnpriced"].format(
+            n=now["unpriced"], names=esc(", ".join(known[:4])) if known else "—")))
     return lines
 
 

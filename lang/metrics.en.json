@@ -54,6 +54,7 @@
   "walletTotal": "💼 {total} across <code>{kept}</code> coins · spam ignored <code>{spam}</code>",
   "walletLine": "<b>{symbol}</b> <code>{usd}</code> 24h <code>{change}</code>",
   "walletLineThin": "<b>{symbol}</b> price from a thin pool (<code>{liq}</code>), not in the total",
+  "walletUnpriced": "⚠️ <code>{n}</code> coins could not be priced just now (the price source did not answer), the total may be short · among them: {names}",
   "tokenLine": "<b>{label}</b> <code>{price}</code> 24h <code>{change}</code> · cap <code>{cap}</code> · liq <code>{liq}</code>",
   "tokenMissing": "<b>{label}</b> — no market data",
   "tokenBelow": "PRICE AT YOUR LEVEL: <b>{label}</b> is down to <code>{price}</code> against your <code>{limit}</code> line — the moment you were waiting for.",
