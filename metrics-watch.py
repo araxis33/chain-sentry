@@ -638,6 +638,13 @@ def measure_wallet(cfg, log, known=None, scanned_to=0, discovered=None):
             "placeholder": bool(item.get("placeholder")),
         })
 
+    # Tokens the owner has looked at and decided are bait (airdropped to a hundred
+    # wallets at once, "worth" hundreds through an empty pool): never shown,
+    # counted or alerted on. 2026-10-03: VRAX on Robinhood Chain.
+    ignore = {a.lower() for a in (w.get("ignore") or [])}
+    if ignore:
+        held = [h for h in held if h["address"] not in ignore]
+
     no_answer = []
     prices = dexscreener_tokens([h["address"] for h in held], chain=w.get("chain"), failed=no_answer)
     # "Nobody could price it" is not "nobody trades it". Such a token is counted and
