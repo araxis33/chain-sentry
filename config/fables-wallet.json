@@ -1,5 +1,5 @@
 {
-  "name": "Кошелёк Fables (Robinhood Chain)",
+  "name": "Адрес на Robinhood Chain (монеты вне пулов)",
   "profile": "wallet",
   "language": "ru",
   "stateFile": "state/fables-wallet-state.json",

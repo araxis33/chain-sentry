@@ -268,6 +268,56 @@ def dexscreener_tokens(addresses, batch_size=5, chain=None, failed=None):
     return best
 
 
+BASE_WETH = "0x4200000000000000000000000000000000000006"
+# Chains KyberSwap quotes, and the USDC a sale is priced into there.
+KYBER_EXIT = {"base": ("base", "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913")}
+
+
+def native_holding(w, rpc, address, log):
+    """The wallet's ETH as a holding, or None when it cannot be read or priced."""
+    try:
+        wei = int(rpc.call("eth_getBalance", [address, "latest"]), 16)
+    except Exception as exc:  # noqa: BLE001 - a missing line beats a wrong zero
+        log("native balance not read: %s" % exc)
+        return None
+    if wei <= 0:
+        return None
+    weth = dexscreener_tokens([BASE_WETH], chain="base").get(BASE_WETH.lower(), {})
+    price = weth.get("price") or 0
+    if price <= 0:
+        log("native balance %.6f ETH not priced (WETH quote missing)" % (wei / 1e18))
+        return None
+    balance = wei / 1e18
+    return {
+        "symbol": "ETH", "address": "native", "native": True, "decimals": 18,
+        "balance": balance, "price": price, "usd": balance * price,
+        # ETH is the deepest market there is; the thin-pool rule is not for it.
+        "liquidity": 1e12, "change24": weth.get("change24"),
+        "imageUrl": weth.get("imageUrl"),
+    }
+
+
+def exit_value(chain, holding):
+    """USDC a sale of the whole holding would return now, or None if not quotable.
+
+    The honest answer to "is this pool too thin to trust": try to sell into it. A
+    pool count says nothing when the price source cannot see the deep pool at all.
+    """
+    route = KYBER_EXIT.get(str(chain or "base").lower())
+    if not route or holding.get("native"):
+        return None
+    network, usdc = route
+    raw = int(holding["balance"] * (10 ** int(holding.get("decimals", 18))))
+    if raw <= 0:
+        return None
+    try:
+        data = http_json("https://aggregator-api.kyberswap.com/%s/api/v1/routes?tokenIn=%s&tokenOut=%s&amountIn=%d"
+                         % (network, holding["address"], usdc, raw), retries=2)
+        return int(((data.get("data") or {}).get("routeSummary") or {}).get("amountOut") or 0) / 1e6
+    except Exception:  # noqa: BLE001 - no quote means the thin rule stands
+        return None
+
+
 def reject_outlier_pairs(pairs, factor=5.0):
     """Drop pools quoting a price the rest of the market disagrees with.
 
@@ -661,6 +711,14 @@ def measure_wallet(cfg, log, known=None, scanned_to=0, discovered=None):
         log("node would not answer for %d token(s), left out of the total: %s"
             % (len(unread), ", ".join(unread)))
 
+    # The chain's own coin is not a token, so the token list never had it: the Base
+    # wallet's ETH and the gas money on Robinhood Chain were simply not counted
+    # (2026-10-03: 0.0028 ETH on Base, 0.0008 on Robinhood). Both chains run on ETH,
+    # priced from WETH on Base, the deepest market for it.
+    native = native_holding(w, rpc, address, log)
+    if native and native["usd"] >= w["minUsd"]:
+        real.append(native)
+
     real.sort(key=lambda h: -h["usd"])
     # A price read from a pool too thin to sell into is not a price. 2026-10-02: one pool
     # holding $22.80 priced 6,000 airdropped VRAX at $385, and a $20K pool priced a
@@ -668,7 +726,19 @@ def measure_wallet(cfg, log, known=None, scanned_to=0, discovered=None):
     # Such holdings stay in the list (the thin/moved alerts still need them) but are
     # left out of the total, and the log says which.
     floor = (cfg.get("thresholds") or {}).get("liquidityBelowUsd") or 0
-    counted = [h for h in real if (h.get("liquidity") or 0) >= floor]
+    # DexScreener cannot always see the deepest pool: on 2026-10-03 it showed IPOD
+    # only in pools worth $165 in total, while a Uniswap v4 IPOD/AAPLc pool it could
+    # not price traded $25K a day, and selling the whole holding returned 98% of its
+    # value. So before a holding is called thin, it is offered for sale: if the
+    # whole position sells for at least 90% of what it is valued at, it counts.
+    for h in real:
+        if (h.get("liquidity") or 0) < floor and not h.get("native") and h["usd"] > 0:
+            out = exit_value(w.get("chain"), h)
+            if out is not None and out >= 0.9 * h["usd"]:
+                log("%s: pools look thin (%s) but the whole holding sells for %s of %s, counted"
+                    % (h["symbol"], fmt_usd(h.get("liquidity") or 0), fmt_usd(out), fmt_usd(h["usd"])))
+                h["sellable"] = True
+    counted = [h for h in real if (h.get("liquidity") or 0) >= floor or h.get("sellable")]
     left_out = [h for h in real if h not in counted]
     for h in left_out:
         h["counted"] = False
@@ -680,7 +750,7 @@ def measure_wallet(cfg, log, known=None, scanned_to=0, discovered=None):
     if unpriced:
         log("price source did not answer for %d token(s), not in the total: %s"
             % (len(unpriced), ", ".join(h["symbol"] for h in (remembered or unpriced)[:8])))
-    kept = real + [h for h in remembered if h not in real]
+    kept = [h for h in real if not h.get("native")] + [h for h in remembered if h not in real]
     return {
         "measuredAt": int(time.time()),
         "fromCache": from_cache,
